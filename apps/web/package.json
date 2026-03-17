@@ -4,17 +4,19 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3005",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@repo/ui": "workspace:*",
+    "@zod-monaco/core": "workspace:*",
+    "@zod-monaco/react": "workspace:*",
     "next": "16.1.5",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

@@ -1,0 +1,42 @@
+{
+  "name": "@zod-monaco/core",
+  "version": "0.1.0",
+  "description": "Zod v4 runtime bridge for JSON Schema generation and validation",
+  "license": "MIT",
+  "author": "Kaan Akin",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "zod",
+    "json-schema",
+    "validation"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsc --watch -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "check-types": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.2",
+    "zod": "^4.0.0"
+  }
+}

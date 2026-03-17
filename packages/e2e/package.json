@@ -1,0 +1,24 @@
+{
+  "name": "@zod-monaco/e2e",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zod-monaco/core": "workspace:*",
+    "@zod-monaco/monaco": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.2",
+    "vitest": "^4.0.18"
+  }
+}

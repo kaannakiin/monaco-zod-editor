@@ -1,0 +1,14 @@
+{
+  "extends": "../typescript-config/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "playwright.config.ts"
+  ]
+}

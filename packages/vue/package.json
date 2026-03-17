@@ -1,0 +1,46 @@
+{
+  "name": "@zod-monaco/vue",
+  "version": "0.1.0",
+  "description": "Vue adapter for Zod-powered Monaco JSON editor",
+  "license": "MIT",
+  "author": "Kaan Akin",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "vue",
+    "monaco",
+    "zod",
+    "json-editor"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsc --watch -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "check-types": "tsc -p tsconfig.check.json --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@zod-monaco/core": "workspace:*",
+    "@zod-monaco/monaco": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.2"
+  }
+}

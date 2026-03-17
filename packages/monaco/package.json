@@ -1,0 +1,43 @@
+{
+  "name": "@zod-monaco/monaco",
+  "version": "0.1.0",
+  "description": "Monaco editor adapter with Zod-powered JSON validation, hover, and completions",
+  "license": "MIT",
+  "author": "Kaan Akin",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "monaco",
+    "editor",
+    "json",
+    "zod",
+    "validation"
+  ],
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsc --watch -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "check-types": "tsc -p tsconfig.check.json --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@zod-monaco/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.2"
+  }
+}
