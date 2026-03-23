@@ -6,6 +6,7 @@ import {
 } from "react";
 import {
   createZodEditorController,
+  type BreadcrumbSegment,
   type MonacoApi,
   type MonacoEditorChangeEvent,
   type MonacoStandaloneEditorLike,
@@ -31,6 +32,7 @@ export interface ZodMonacoEditorProps extends Omit<
   style?: CSSProperties;
   onChange?: (value: string, event: MonacoEditorChangeEvent) => void;
   onValidationChange?: (result: ValidationResult) => void;
+  onCursorPathChange?: (segments: BreadcrumbSegment[]) => void;
   onMount?: (
     editor: MonacoStandaloneEditorLike,
     controller: ZodEditorController,
@@ -46,6 +48,7 @@ export function ZodMonacoEditor({
   monaco,
   onChange,
   onValidationChange,
+  onCursorPathChange,
   onMount,
   style,
   validationDelay,
@@ -57,6 +60,7 @@ export function ZodMonacoEditor({
   const initialValueRef = useRef(value ?? defaultValue);
   const onChangeRef = useRef(onChange);
   const onValidationChangeRef = useRef(onValidationChange);
+  const onCursorPathChangeRef = useRef(onCursorPathChange);
   const onMountRef = useRef(onMount);
 
   useEffect(() => {
@@ -66,6 +70,10 @@ export function ZodMonacoEditor({
   useEffect(() => {
     onValidationChangeRef.current = onValidationChange;
   }, [onValidationChange]);
+
+  useEffect(() => {
+    onCursorPathChangeRef.current = onCursorPathChange;
+  }, [onCursorPathChange]);
 
   useEffect(() => {
     onMountRef.current = onMount;
@@ -92,6 +100,9 @@ export function ZodMonacoEditor({
     const validationSubscription = controller.onValidationChange((result) => {
       onValidationChangeRef.current?.(result);
     });
+    const cursorPathSubscription = controller.onCursorPathChange((segments) => {
+      onCursorPathChangeRef.current?.(segments);
+    });
 
     controllerRef.current = controller;
     onMountRef.current?.(editor, controller);
@@ -99,6 +110,7 @@ export function ZodMonacoEditor({
     return () => {
       changeSubscription.dispose();
       validationSubscription.dispose();
+      cursorPathSubscription.dispose();
       controller.dispose();
       controllerRef.current = null;
     };

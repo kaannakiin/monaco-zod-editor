@@ -1,5 +1,6 @@
 import {
   createZodEditorController,
+  type BreadcrumbSegment,
   type CreateZodEditorControllerOptions,
   type MonacoDisposable,
   type ValidationResult,
@@ -20,7 +21,11 @@ export interface ZodMonacoAngularController extends MonacoDisposable {
   onValidationChange(
     listener: (result: ValidationResult) => void,
   ): MonacoDisposable;
+  onCursorPathChange(
+    listener: (segments: BreadcrumbSegment[]) => void,
+  ): MonacoDisposable;
   revealIssue(issue: ZodIssue): void;
+  revealPath(path: PropertyKey[]): void;
 }
 
 export type CreateZodMonacoAngularControllerOptions =
@@ -59,8 +64,14 @@ export function createZodMonacoAngularController(
     onValidationChange(listener) {
       return controller.onValidationChange(listener);
     },
+    onCursorPathChange(listener) {
+      return controller.onCursorPathChange(listener);
+    },
     revealIssue(issue) {
       controller.revealIssue(issue);
+    },
+    revealPath(path) {
+      controller.revealPath(path);
     },
     dispose() {
       touchedListeners.clear();

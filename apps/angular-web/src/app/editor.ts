@@ -1,31 +1,50 @@
 import {
+  ChangeDetectorRef,
   Component,
   ChangeDetectionStrategy,
   ElementRef,
   OnDestroy,
   afterNextRender,
+  inject,
   viewChild,
   signal,
-} from "@angular/core";
-import {
-  treeNodeDescriptor,
-  treeNodeDefaultValue,
-} from "@zod-monaco/core";
+} from '@angular/core';
+import { treeNodeDescriptor, treeNodeDefaultValue } from '@zod-monaco/core';
 import {
   createZodMonacoAngularController,
   loadMonaco,
+  type BreadcrumbSegment,
   type MonacoDisposable,
   type ValidationResult,
   type ZodIssue,
   type ZodMonacoAngularController,
-} from "@zod-monaco/angular";
+} from '@zod-monaco/angular';
 
 @Component({
-  selector: "app-editor",
+  selector: 'app-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!loaded()) {
       <div class="loading">Loading editor...</div>
+    }
+    @if (breadcrumbs().length > 0) {
+      <nav class="breadcrumb-bar" aria-label="JSON path">
+        @for (segment of breadcrumbs(); track $index) {
+          @if ($index > 0) {
+            <span class="breadcrumb-separator" aria-hidden="true">›</span>
+          }
+          <button
+            type="button"
+            class="breadcrumb-segment"
+            [class.breadcrumb-active]="$last"
+            (mousedown)="$event.preventDefault()"
+            (click)="revealPath(segment.path)"
+            [attr.aria-current]="$last ? 'location' : null"
+          >
+            {{ segment.label }}
+          </button>
+        }
+      </nav>
     }
     <div #container class="editor-container"></div>
     @if (loaded() && issues().length > 0) {
@@ -38,7 +57,7 @@ import {
               (mousedown)="$event.preventDefault()"
               (click)="revealIssue(issue)"
             >
-              <span class="issue-path">{{ issue.path.join(" › ") || "root" }}</span>
+              <span class="issue-path">{{ issue.path.join(' › ') || 'root' }}</span>
               <span class="issue-message">{{ issue.message }}</span>
             </button>
           </li>
@@ -50,9 +69,42 @@ import {
     :host {
       display: block;
     }
+    .breadcrumb-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      background: rgba(30, 30, 30, 0.8);
+      border-radius: 12px 12px 0 0;
+      font-size: 13px;
+      min-height: 32px;
+      overflow-x: auto;
+    }
+    .breadcrumb-segment {
+      background: none;
+      border: none;
+      color: rgba(244, 247, 251, 0.6);
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: inherit;
+      white-space: nowrap;
+    }
+    .breadcrumb-segment:hover {
+      background: rgba(244, 247, 251, 0.1);
+      color: #f4f7fb;
+    }
+    .breadcrumb-active {
+      color: #f4f7fb;
+      font-weight: 600;
+    }
+    .breadcrumb-separator {
+      color: rgba(244, 247, 251, 0.3);
+    }
     .editor-container {
       height: 80vh;
-      border-radius: 12px;
+      border-radius: 0 0 12px 12px;
       overflow: hidden;
     }
     .loading {
@@ -99,12 +151,15 @@ import {
   `,
 })
 export class EditorComponent implements OnDestroy {
-  readonly container = viewChild.required<ElementRef<HTMLDivElement>>("container");
+  readonly #cdr = inject(ChangeDetectorRef);
+  readonly container = viewChild.required<ElementRef<HTMLDivElement>>('container');
   readonly loaded = signal(false);
   readonly issues = signal<ZodIssue[]>([]);
+  readonly breadcrumbs = signal<BreadcrumbSegment[]>([]);
 
   #controller: ZodMonacoAngularController | null = null;
   #validationSubscription: MonacoDisposable | null = null;
+  #cursorPathSubscription: MonacoDisposable | null = null;
 
   constructor() {
     afterNextRender(() => {
@@ -120,31 +175,43 @@ export class EditorComponent implements OnDestroy {
       descriptor: treeNodeDescriptor,
       value: treeNodeDefaultValue,
       editorOptions: {
-        theme: "vs-dark",
+        theme: 'vs-dark',
         minimap: { enabled: false },
         fontSize: 14,
-        lineNumbers: "on",
+        lineNumbers: 'on',
         scrollBeyondLastLine: false,
         padding: { top: 16 },
       },
     });
 
     this.#controller.mount(this.container().nativeElement);
+    this.loaded.set(true);
+    this.#cdr.markForCheck();
 
     this.#validationSubscription = this.#controller.onValidationChange(
       (result: ValidationResult) => {
         this.issues.set(result.issues);
+        this.#cdr.markForCheck();
       },
     );
 
-    this.loaded.set(true);
+    this.#cursorPathSubscription = this.#controller.onCursorPathChange((segments) => {
+      this.breadcrumbs.set(segments);
+      this.#cdr.markForCheck();
+    });
   }
 
   revealIssue(issue: ZodIssue): void {
     this.#controller?.revealIssue(issue);
   }
 
+  revealPath(path: PropertyKey[]): void {
+    this.#controller?.revealPath(path);
+  }
+
   ngOnDestroy(): void {
+    this.#cursorPathSubscription?.dispose();
+    this.#cursorPathSubscription = null;
     this.#validationSubscription?.dispose();
     this.#validationSubscription = null;
     this.#controller?.dispose();

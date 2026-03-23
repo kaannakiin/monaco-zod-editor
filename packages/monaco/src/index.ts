@@ -1,8 +1,9 @@
 import type { SchemaDescriptor, ZodIssue } from "@zod-monaco/core";
 import type { FeatureToggles } from "./types.js";
-import { resolveJsonPath } from "./json-path-position.js";
+import { resolveJsonPath, positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
 import { createZodHoverProvider } from "./hover.js";
 import { createZodCompletionProvider } from "./completions.js";
+import { buildBreadcrumbSegments } from "./breadcrumb.js";
 
 export type { FeatureToggles } from "./types.js";
 export type { JsonPosition, ValueContext } from "./json-path-position.js";
@@ -12,6 +13,8 @@ export {
   getValueContext,
   positionToOffset,
 } from "./json-path-position.js";
+export { buildBreadcrumbSegments } from "./breadcrumb.js";
+export type { BreadcrumbSegment } from "./breadcrumb.js";
 export { formatFieldMetadataHover } from "./hover.js";
 export type { ZodHoverResult, ZodHoverProvider } from "./hover.js";
 export { createZodCompletionProvider } from "./completions.js";
@@ -50,6 +53,9 @@ export interface MonacoStandaloneEditorLike extends MonacoDisposable {
   setValue(value: string): void;
   onDidChangeModelContent(
     listener: (event: MonacoEditorChangeEvent) => void,
+  ): MonacoDisposable;
+  onDidChangeCursorPosition(
+    listener: (event: { position: MonacoPosition }) => void,
   ): MonacoDisposable;
   addCommand(keybinding: number, handler: () => void): string | null;
   revealLineInCenter(lineNumber: number): void;
@@ -189,7 +195,11 @@ export interface ZodEditorController extends MonacoDisposable {
   onValidationChange(
     listener: (result: ValidationResult) => void,
   ): MonacoDisposable;
+  onCursorPathChange(
+    listener: (segments: import("./breadcrumb.js").BreadcrumbSegment[]) => void,
+  ): MonacoDisposable;
   revealIssue(issue: ZodIssue): void;
+  revealPath(path: PropertyKey[]): void;
   format(): boolean;
 }
 
@@ -200,6 +210,9 @@ class DefaultZodEditorController implements ZodEditorController {
   readonly #validationListeners = new Set<
     (result: ValidationResult) => void
   >();
+  readonly #cursorPathListeners = new Set<
+    (segments: import("./breadcrumb.js").BreadcrumbSegment[]) => void
+  >();
 
   readonly #monaco: MonacoApi;
   readonly #editorOptions: Record<string, unknown>;
@@ -208,6 +221,7 @@ class DefaultZodEditorController implements ZodEditorController {
 
   #editor: MonacoStandaloneEditorLike | null = null;
   #changeDisposable: MonacoDisposable | null = null;
+  #cursorDisposable: MonacoDisposable | null = null;
   #hoverDisposable: MonacoDisposable | null = null;
   #completionDisposable: MonacoDisposable | null = null;
   #validationTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -257,6 +271,17 @@ class DefaultZodEditorController implements ZodEditorController {
       }
 
       this.#scheduleValidation();
+    });
+
+    this.#cursorDisposable = this.#editor.onDidChangeCursorPosition((event) => {
+      if (this.#cursorPathListeners.size === 0) return;
+      const text = this.#editor?.getValue() ?? "";
+      const offset = positionToOffset(text, event.position.lineNumber, event.position.column);
+      const result = resolvePathAtOffset(text, offset);
+      const segments = buildBreadcrumbSegments(result?.path ?? []);
+      for (const listener of this.#cursorPathListeners) {
+        listener(segments);
+      }
     });
 
     this.#scheduleValidation();
@@ -321,11 +346,37 @@ class DefaultZodEditorController implements ZodEditorController {
     };
   }
 
+  onCursorPathChange(
+    listener: (segments: import("./breadcrumb.js").BreadcrumbSegment[]) => void,
+  ): MonacoDisposable {
+    this.#cursorPathListeners.add(listener);
+
+    return {
+      dispose: () => {
+        this.#cursorPathListeners.delete(listener);
+      },
+    };
+  }
+
   revealIssue(issue: ZodIssue): void {
     const editor = this.#editor;
     if (!editor) return;
     const text = editor.getValue();
     const position = resolveJsonPath(text, issue.path);
+    if (position) {
+      setTimeout(() => {
+        editor.focus();
+        editor.setPosition({ lineNumber: position.startLineNumber, column: position.startColumn });
+        editor.revealLineInCenter(position.startLineNumber);
+      }, 0);
+    }
+  }
+
+  revealPath(path: PropertyKey[]): void {
+    const editor = this.#editor;
+    if (!editor) return;
+    const text = editor.getValue();
+    const position = resolveJsonPath(text, path);
     if (position) {
       setTimeout(() => {
         editor.focus();
@@ -373,12 +424,16 @@ class DefaultZodEditorController implements ZodEditorController {
     this.#completionDisposable?.dispose();
     this.#completionDisposable = null;
 
+    this.#cursorDisposable?.dispose();
+    this.#cursorDisposable = null;
+
     this.#changeDisposable?.dispose();
     this.#editor?.dispose();
     this.#editor = null;
     this.#changeDisposable = null;
     this.#listeners.clear();
     this.#validationListeners.clear();
+    this.#cursorPathListeners.clear();
   }
 
   #registerHoverProvider(): void {
