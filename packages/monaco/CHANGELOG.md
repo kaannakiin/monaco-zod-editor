@@ -1,5 +1,11 @@
 # @zod-monaco/monaco
 
+## 1.0.2
+
+### Patch Changes
+
+- 8092569: Fix circular type dependency between index.ts and raw-types.ts by extracting base Monaco interfaces to a new monaco-types.ts leaf module. This resolves moduleResolution compatibility issues for consumers using "node" or "bundler" strategies.
+
 ## 1.0.1
 
 ### Patch Changes

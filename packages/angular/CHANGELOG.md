@@ -1,5 +1,12 @@
 # @zod-monaco/angular
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [8092569]
+  - @zod-monaco/monaco@1.0.2
+
 ## 1.0.1
 
 ### Patch Changes
