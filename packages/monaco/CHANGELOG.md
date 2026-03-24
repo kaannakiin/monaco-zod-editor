@@ -1,5 +1,11 @@
 # @zod-monaco/monaco
 
+## 1.0.4
+
+### Patch Changes
+
+- Revert fetch-then-blob worker to direct Worker with type classic to fix worker loading.
+
 ## 1.0.2
 
 ### Patch Changes
