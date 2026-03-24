@@ -1,6 +1,6 @@
 {
   "name": "@zod-monaco/vue",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Vue adapter for Zod-powered Monaco JSON editor",
   "license": "MIT",
   "author": "Kaan Akin",
