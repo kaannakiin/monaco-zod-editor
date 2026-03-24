@@ -39,9 +39,10 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
   const basePath = options?.basePath ?? DEFAULT_CDN;
 
   return new Promise<MonacoApi>((resolve, reject) => {
-    // Use getWorker instead of getWorkerUrl to avoid CORS issues with CDN loading.
-    // getWorker returns a Worker instance using a blob proxy that calls importScripts(),
-    // which is not subject to same-origin restrictions in worker context.
+    // Use fetch-then-blob to load workers from CDN without CORS issues.
+    // Fetching works because jsDelivr sets Access-Control-Allow-Origin: *.
+    // The resulting blob URL is same-origin so the Worker constructor succeeds.
+    // (importScripts() inside a blob worker is blocked in modern Chrome.)
     (
       globalThis as unknown as { MonacoEnvironment: unknown }
     ).MonacoEnvironment = {
@@ -50,10 +51,9 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
           label === "json"
             ? `${basePath}/vs/language/json/json.worker.js`
             : `${basePath}/vs/editor/editor.worker.js`;
-        const blob = new Blob([`importScripts('${workerUrl}');`], {
-          type: "application/javascript",
-        });
-        return new Worker(URL.createObjectURL(blob));
+        return fetch(workerUrl)
+          .then((res) => res.blob())
+          .then((blob) => new Worker(URL.createObjectURL(blob)));
       },
     };
 
