@@ -1,4 +1,5 @@
 import type { MonacoApi } from "./index.js";
+import type { RawMonaco } from "./raw-types.js";
 
 interface AmdRequire {
   config(params: { paths: Record<string, string> }): void;
@@ -11,6 +12,15 @@ interface AmdRequire {
 
 export interface LoadMonacoOptions {
   basePath?: string;
+  /**
+   * Called once after Monaco loads, before the returned promise resolves.
+   * Use this to call `monaco.editor.defineTheme()`, register global
+   * providers, or perform any other one-time Monaco setup.
+   *
+   * Because `loadMonaco()` caches its result as a singleton, only the
+   * `onLoad` callback from the **first** caller will execute.
+   */
+  onLoad?: (monaco: RawMonaco) => void | Promise<void>;
 }
 
 const MONACO_VERSION = "0.52.2";
@@ -21,11 +31,13 @@ let monacoPromise: Promise<MonacoApi> | null = null;
 export function loadMonaco(options?: LoadMonacoOptions): Promise<MonacoApi> {
   if (monacoPromise) return monacoPromise;
 
-  monacoPromise = doLoad(options?.basePath ?? DEFAULT_CDN);
+  monacoPromise = doLoad(options);
   return monacoPromise;
 }
 
-function doLoad(basePath: string): Promise<MonacoApi> {
+function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
+  const basePath = options?.basePath ?? DEFAULT_CDN;
+
   return new Promise<MonacoApi>((resolve, reject) => {
     (
       globalThis as unknown as { MonacoEnvironment: unknown }
@@ -49,7 +61,15 @@ function doLoad(basePath: string): Promise<MonacoApi> {
       amdRequire.config({ paths: { vs: `${basePath}/vs` } });
       amdRequire(
         ["vs/editor/editor.main"],
-        (monaco: MonacoApi) => resolve(monaco),
+        async (monaco: MonacoApi) => {
+          try {
+            await options?.onLoad?.(monaco as RawMonaco);
+          } catch (err) {
+            reject(err);
+            return;
+          }
+          resolve(monaco);
+        },
         (err: Error) => reject(err),
       );
     };

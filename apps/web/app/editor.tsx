@@ -8,7 +8,18 @@ export default function Editor() {
   const [monaco, setMonaco] = useState<MonacoApi | null>(null);
 
   useEffect(() => {
-    loadMonaco().then(setMonaco);
+    loadMonaco({
+      onLoad(m) {
+        m.editor.defineTheme("zod-dark", {
+          base: "vs-dark",
+          inherit: true,
+          rules: [],
+          colors: {
+            "editor.background": "#0d1117",
+          },
+        });
+      },
+    }).then(setMonaco);
   }, []);
 
   if (!monaco) {
@@ -33,8 +44,8 @@ export default function Editor() {
       monaco={monaco}
       descriptor={treeNodeDescriptor}
       defaultValue={treeNodeDefaultValue}
+      theme="zod-dark"
       editorOptions={{
-        theme: "vs-dark",
         minimap: { enabled: false },
         fontSize: 14,
         lineNumbers: "on",

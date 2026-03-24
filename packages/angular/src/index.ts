@@ -3,6 +3,8 @@ import {
   type BreadcrumbSegment,
   type CreateZodEditorControllerOptions,
   type MonacoDisposable,
+  type RawMonaco,
+  type RawMonacoEditor,
   type ValidationResult,
   type ZodEditorController,
   type ZodIssue,
@@ -26,6 +28,9 @@ export interface ZodMonacoAngularController extends MonacoDisposable {
   ): MonacoDisposable;
   revealIssue(issue: ZodIssue): void;
   revealPath(path: PropertyKey[]): void;
+  updateOptions(options: Record<string, unknown>): void;
+  getMonaco(): RawMonaco;
+  getRawEditor(): RawMonacoEditor | null;
 }
 
 export type CreateZodMonacoAngularControllerOptions =
@@ -72,6 +77,15 @@ export function createZodMonacoAngularController(
     },
     revealPath(path) {
       controller.revealPath(path);
+    },
+    updateOptions(options) {
+      controller.updateOptions(options);
+    },
+    getMonaco() {
+      return controller.getMonaco();
+    },
+    getRawEditor() {
+      return controller.getRawEditor();
     },
     dispose() {
       touchedListeners.clear();

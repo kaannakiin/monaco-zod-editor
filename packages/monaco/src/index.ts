@@ -1,5 +1,6 @@
 import type { SchemaDescriptor, ZodIssue } from "@zod-monaco/core";
 import type { FeatureToggles } from "./types.js";
+import type { RawMonaco, RawMonacoEditor } from "./raw-types.js";
 import { resolveJsonPath, positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
 import { createZodHoverProvider } from "./hover.js";
 import { createZodCompletionProvider } from "./completions.js";
@@ -21,6 +22,7 @@ export { createZodCompletionProvider } from "./completions.js";
 export type { ZodCompletionProvider } from "./completions.js";
 export { loadMonaco } from "./load-monaco.js";
 export type { LoadMonacoOptions } from "./load-monaco.js";
+export type { RawMonaco, RawMonacoEditor, RawMonacoEditorApi } from "./raw-types.js";
 export type { ZodIssue } from "@zod-monaco/core";
 
 export interface ValidationResult {
@@ -201,6 +203,12 @@ export interface ZodEditorController extends MonacoDisposable {
   revealIssue(issue: ZodIssue): void;
   revealPath(path: PropertyKey[]): void;
   format(): boolean;
+  /** Update editor options at runtime without remounting (e.g. fontSize, readOnly). */
+  updateOptions(options: Record<string, unknown>): void;
+  /** Access the full Monaco namespace for native APIs like `defineTheme`, `setTheme`, etc. */
+  getMonaco(): RawMonaco;
+  /** Access the full underlying editor instance with all native methods. */
+  getRawEditor(): RawMonacoEditor | null;
 }
 
 class DefaultZodEditorController implements ZodEditorController {
@@ -403,6 +411,18 @@ class DefaultZodEditorController implements ZodEditorController {
       editor.setValue(formatted);
     }
     return true;
+  }
+
+  updateOptions(options: Record<string, unknown>): void {
+    (this.#editor as any)?.updateOptions?.(options);
+  }
+
+  getMonaco(): RawMonaco {
+    return this.#monaco as RawMonaco;
+  }
+
+  getRawEditor(): RawMonacoEditor | null {
+    return this.#editor as RawMonacoEditor | null;
   }
 
   dispose(): void {

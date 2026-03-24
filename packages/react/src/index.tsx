@@ -10,6 +10,7 @@ import {
   type MonacoApi,
   type MonacoEditorChangeEvent,
   type MonacoStandaloneEditorLike,
+  type RawMonaco,
   type ZodEditorController,
   type FeatureToggles,
   type ValidationResult,
@@ -28,6 +29,8 @@ export interface ZodMonacoEditorProps extends Omit<
   value?: string;
   defaultValue?: string;
   editorOptions?: Record<string, unknown>;
+  /** Monaco theme name. Changes are applied reactively without remounting the editor. */
+  theme?: string;
   validationDelay?: number;
   style?: CSSProperties;
   onChange?: (value: string, event: MonacoEditorChangeEvent) => void;
@@ -36,6 +39,7 @@ export interface ZodMonacoEditorProps extends Omit<
   onMount?: (
     editor: MonacoStandaloneEditorLike,
     controller: ZodEditorController,
+    monaco: RawMonaco,
   ) => void;
 }
 
@@ -51,6 +55,7 @@ export function ZodMonacoEditor({
   onCursorPathChange,
   onMount,
   style,
+  theme,
   validationDelay,
   value,
   ...props
@@ -105,7 +110,7 @@ export function ZodMonacoEditor({
     });
 
     controllerRef.current = controller;
-    onMountRef.current?.(editor, controller);
+    onMountRef.current?.(editor, controller, monaco as RawMonaco);
 
     return () => {
       changeSubscription.dispose();
@@ -115,6 +120,13 @@ export function ZodMonacoEditor({
       controllerRef.current = null;
     };
   }, [editorOptions, monaco, features, validationDelay]);
+
+  // Sync theme changes without remounting
+  useEffect(() => {
+    if (theme !== undefined) {
+      (monaco.editor as any).setTheme?.(theme);
+    }
+  }, [theme, monaco]);
 
   // Sync controlled value
   useEffect(() => {

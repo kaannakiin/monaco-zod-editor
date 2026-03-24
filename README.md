@@ -13,22 +13,22 @@ Zod v4.
 
 ## Current Status
 
-This repository has been intentionally reset to remove misleading legacy
-scaffolding. The remaining code is a clean starting point:
-
-- `@zod-monaco/core` is an empty shell reserved for the upcoming Zod v4 bridge.
-- `@zod-monaco/monaco` keeps a minimal Monaco controller with JSON as the
-  default editor mode.
-- `@zod-monaco/react`, `@zod-monaco/vue`, and `@zod-monaco/angular` remain thin
-  wrappers around that controller shell.
-- `apps/web` is a status page instead of a fake feature demo.
+- `@zod-monaco/core` provides `describeSchema()` — the Zod v4 → JSON Schema
+  bridge with field-level metadata (titles, descriptions, examples, placeholders).
+- `@zod-monaco/monaco` is the framework-agnostic Monaco controller with JSON
+  Schema validation, Zod runtime diagnostics, hover tooltips, auto-completions,
+  breadcrumb navigation, and full native Monaco API passthrough (themes, options).
+- `@zod-monaco/react`, `@zod-monaco/vue`, and `@zod-monaco/angular` are thin
+  framework wrappers around that controller.
+- `apps/web` is a live JSON editor demo powered by the above packages.
 
 ## Workspace Layout
 
-- `apps/web`: lightweight product-status surface
-- `packages/core`: future Zod v4 runtime integration point
-- `packages/monaco`: Monaco controller shell
-- `packages/react`: React wrapper
+- `apps/web`: live JSON editor demo (Next.js)
+- `apps/angular-web`: Angular demo
+- `packages/core`: Zod v4 schema descriptor and metadata resolution
+- `packages/monaco`: Monaco JSON controller with native API passthrough
+- `packages/react`: React wrapper (`<ZodMonacoEditor />`)
 - `packages/vue`: Vue wrapper
 - `packages/angular`: Angular wrapper
 - `packages/typescript-config`: shared TypeScript config
@@ -42,11 +42,26 @@ pnpm --filter @zod-monaco/core test
 pnpm --filter web dev
 ```
 
-## Near-Term Build Order
+## Theme Customization
 
-1. Implement `@zod-monaco/core` around Zod v4 schema input.
-2. Wire Monaco JSON diagnostics and schema registration in
-   `@zod-monaco/monaco`.
-3. Rebuild the React wrapper around the new schema-first API.
-4. Replace the status page with a real JSON editor demo only after the runtime
-   path exists.
+Register custom themes via the `onLoad` callback, then apply them reactively:
+
+```tsx
+import { loadMonaco, ZodMonacoEditor } from "@zod-monaco/react";
+
+const monaco = await loadMonaco({
+  onLoad(m) {
+    m.editor.defineTheme("my-theme", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [],
+      colors: { "editor.background": "#0d1117" },
+    });
+  },
+});
+
+<ZodMonacoEditor monaco={monaco} theme="my-theme" descriptor={myDescriptor} />
+```
+
+For full Monaco IntelliSense on the escape-hatch types (`RawMonaco`,
+`RawMonacoEditor`), install `monaco-editor` as a devDependency.
