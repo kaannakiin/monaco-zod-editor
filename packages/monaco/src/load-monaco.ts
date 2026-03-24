@@ -51,9 +51,7 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
           label === "json"
             ? `${basePath}/vs/language/json/json.worker.js`
             : `${basePath}/vs/editor/editor.worker.js`;
-        return fetch(workerUrl)
-          .then((res) => res.blob())
-          .then((blob) => new Worker(URL.createObjectURL(blob)));
+        return new Worker(workerUrl, { type: "classic" });
       },
     };
 
