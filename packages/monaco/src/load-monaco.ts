@@ -39,16 +39,56 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
   const basePath = options?.basePath ?? DEFAULT_CDN;
 
   return new Promise<MonacoApi>((resolve, reject) => {
+    // Use getWorker instead of getWorkerUrl to avoid CORS issues with CDN loading.
+    // getWorker returns a Worker instance using a blob proxy that calls importScripts(),
+    // which is not subject to same-origin restrictions in worker context.
     (
       globalThis as unknown as { MonacoEnvironment: unknown }
     ).MonacoEnvironment = {
-      getWorkerUrl(_workerId: string, label: string) {
-        if (label === "json") {
-          return `${basePath}/vs/language/json/json.worker.js`;
-        }
-        return `${basePath}/vs/editor/editor.worker.js`;
+      getWorker(_workerId: string, label: string) {
+        const workerUrl =
+          label === "json"
+            ? `${basePath}/vs/language/json/json.worker.js`
+            : `${basePath}/vs/editor/editor.worker.js`;
+        const blob = new Blob([`importScripts('${workerUrl}');`], {
+          type: "application/javascript",
+        });
+        return new Worker(URL.createObjectURL(blob));
       },
     };
+
+    const win = globalThis as unknown as {
+      monaco?: MonacoApi;
+      require?: AmdRequire;
+    };
+
+    const runOnLoad = async (monaco: MonacoApi) => {
+      try {
+        await options?.onLoad?.(monaco as RawMonaco);
+      } catch (err) {
+        reject(err);
+        return;
+      }
+      resolve(monaco);
+    };
+
+    // If Monaco is already loaded (e.g., by another library like @ng-util/monaco-editor),
+    // reuse it directly without loading scripts again.
+    if (win.monaco) {
+      runOnLoad(win.monaco);
+      return;
+    }
+
+    // If AMD require is already available, skip loading loader.js
+    if (win.require) {
+      win.require.config({ paths: { vs: `${basePath}/vs` } });
+      win.require(
+        ["vs/editor/editor.main"],
+        (monaco: MonacoApi) => runOnLoad(monaco),
+        (err: Error) => reject(err),
+      );
+      return;
+    }
 
     const script = document.createElement("script");
     script.src = `${basePath}/vs/loader.js`;
@@ -61,15 +101,7 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
       amdRequire.config({ paths: { vs: `${basePath}/vs` } });
       amdRequire(
         ["vs/editor/editor.main"],
-        async (monaco: MonacoApi) => {
-          try {
-            await options?.onLoad?.(monaco as RawMonaco);
-          } catch (err) {
-            reject(err);
-            return;
-          }
-          resolve(monaco);
-        },
+        (monaco: MonacoApi) => runOnLoad(monaco),
         (err: Error) => reject(err),
       );
     };
