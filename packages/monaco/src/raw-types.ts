@@ -1,10 +1,11 @@
+import type { MonacoEditorApi, MonacoApi, MonacoStandaloneEditorLike } from "./monaco-types.js";
+
 /**
  * A pass-through editor API that includes all narrow `MonacoEditorApi` members
  * plus any native Monaco editor namespace method (`defineTheme`, `setTheme`,
  * `createModel`, `colorize`, etc.).
  */
-export type RawMonacoEditorApi = import("./index.js").MonacoEditorApi &
-  Record<string, any>;
+export type RawMonacoEditorApi = MonacoEditorApi & Record<string, any>;
 
 /**
  * The full Monaco namespace as loaded from the CDN.
@@ -17,7 +18,7 @@ export type RawMonacoEditorApi = import("./index.js").MonacoEditorApi &
  * const m = monaco as unknown as typeof import('monaco-editor');
  * ```
  */
-export type RawMonaco = Omit<import("./index.js").MonacoApi, "editor"> & {
+export type RawMonaco = Omit<MonacoApi, "editor"> & {
   editor: RawMonacoEditorApi;
 } & Record<string, any>;
 
@@ -32,5 +33,4 @@ export type RawMonaco = Omit<import("./index.js").MonacoApi, "editor"> & {
  * const e = editor as unknown as monaco.editor.IStandaloneCodeEditor;
  * ```
  */
-export type RawMonacoEditor = import("./index.js").MonacoStandaloneEditorLike &
-  Record<string, any>;
+export type RawMonacoEditor = MonacoStandaloneEditorLike & Record<string, any>;

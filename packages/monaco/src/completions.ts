@@ -6,7 +6,7 @@ import type {
   MonacoCompletionContext,
   MonacoCompletionList,
   MonacoCompletionItem,
-} from "./index.js";
+} from "./monaco-types.js";
 import {
   positionToOffset,
   getValueContext,

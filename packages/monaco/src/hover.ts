@@ -1,6 +1,6 @@
 import type { FieldMetadata, SchemaDescriptor } from "@zod-monaco/core";
 import { resolveFieldMetadata, resolveJsonSchemaNode } from "@zod-monaco/core";
-import type { MonacoModelLike, MonacoPosition } from "./index.js";
+import type { MonacoModelLike, MonacoPosition } from "./monaco-types.js";
 import { positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
 
 export interface ZodHoverResult {

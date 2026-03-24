@@ -1,4 +1,4 @@
-import type { MonacoApi } from "./index.js";
+import type { MonacoApi } from "./monaco-types.js";
 import type { RawMonaco } from "./raw-types.js";
 
 interface AmdRequire {
