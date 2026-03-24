@@ -1,5 +1,11 @@
 # @zod-monaco/monaco
 
+## 1.0.6
+
+### Patch Changes
+
+- Only set MonacoEnvironment.getWorker when not already configured; use fetch-then-blob worker to avoid cross-origin restrictions.
+
 ## 1.0.5
 
 ### Patch Changes

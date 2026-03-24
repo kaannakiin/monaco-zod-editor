@@ -54,32 +54,42 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
       resolve(monaco);
     };
 
+    // Ensure a working getWorker is always available.
+    // Use blob + importScripts to avoid cross-origin Worker restrictions.
+    const env = globalThis as unknown as {
+      MonacoEnvironment?: { getWorker?: unknown };
+    };
+    if (!env.MonacoEnvironment?.getWorker) {
+      (
+        globalThis as unknown as { MonacoEnvironment: unknown }
+      ).MonacoEnvironment = {
+        ...env.MonacoEnvironment,
+        getWorker(_workerId: string, label: string) {
+          const workerUrl = `${basePath}/vs/base/worker/workerMain.js`;
+          const workerCode =
+            "fetch('" +
+            workerUrl +
+            "')" +
+            ".then(function(r){return r.text();})" +
+            ".then(function(text){" +
+            "var b=new Blob([text],{type:'application/javascript'});" +
+            "var u=URL.createObjectURL(b);" +
+            "importScripts(u);" +
+            "URL.revokeObjectURL(u);" +
+            "})" +
+            ".catch(function(e){console.error('[zod-monaco] Worker load failed:',e);});";
+          var blob = new Blob([workerCode], { type: "application/javascript" });
+          return new Worker(URL.createObjectURL(blob));
+        },
+      };
+    }
+
     // If Monaco is already loaded (e.g., by another library like @ng-util/monaco-editor),
-    // reuse it directly without touching MonacoEnvironment — the host app's
-    // worker configuration is already correct.
+    // reuse it directly without loading scripts again.
     if (win.monaco) {
       runOnLoad(win.monaco);
       return;
     }
-
-    // Only set MonacoEnvironment when we are responsible for loading Monaco.
-    // Use blob + importScripts to avoid cross-origin Worker restrictions.
-    // The blob URL is same-origin, and importScripts() inside a worker
-    // is not subject to CORS restrictions.
-    (
-      globalThis as unknown as { MonacoEnvironment: unknown }
-    ).MonacoEnvironment = {
-      getWorker(_workerId: string, label: string) {
-        const workerUrl =
-          label === "json"
-            ? `${basePath}/vs/language/json/json.worker.js`
-            : `${basePath}/vs/editor/editor.worker.js`;
-        const blob = new Blob([`importScripts('${workerUrl}');`], {
-          type: "text/javascript",
-        });
-        return new Worker(URL.createObjectURL(blob));
-      },
-    };
 
     // If AMD require is already available, skip loading loader.js
     if (win.require) {

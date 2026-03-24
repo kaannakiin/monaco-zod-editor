@@ -1,5 +1,11 @@
 # angular-web
 
+## 1.0.5
+
+### Patch Changes
+
+- @zod-monaco/angular@1.0.6
+
 ## 1.0.4
 
 ### Patch Changes

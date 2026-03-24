@@ -1,5 +1,12 @@
 # @zod-monaco/e2e
 
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @zod-monaco/monaco@1.0.6
+
 ## 1.0.4
 
 ### Patch Changes
