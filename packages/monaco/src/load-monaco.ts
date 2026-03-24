@@ -39,22 +39,6 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
   const basePath = options?.basePath ?? DEFAULT_CDN;
 
   return new Promise<MonacoApi>((resolve, reject) => {
-    // Use fetch-then-blob to load workers from CDN without CORS issues.
-    // Fetching works because jsDelivr sets Access-Control-Allow-Origin: *.
-    // The resulting blob URL is same-origin so the Worker constructor succeeds.
-    // (importScripts() inside a blob worker is blocked in modern Chrome.)
-    (
-      globalThis as unknown as { MonacoEnvironment: unknown }
-    ).MonacoEnvironment = {
-      getWorker(_workerId: string, label: string) {
-        const workerUrl =
-          label === "json"
-            ? `${basePath}/vs/language/json/json.worker.js`
-            : `${basePath}/vs/editor/editor.worker.js`;
-        return new Worker(workerUrl, { type: "classic" });
-      },
-    };
-
     const win = globalThis as unknown as {
       monaco?: MonacoApi;
       require?: AmdRequire;
@@ -71,11 +55,31 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
     };
 
     // If Monaco is already loaded (e.g., by another library like @ng-util/monaco-editor),
-    // reuse it directly without loading scripts again.
+    // reuse it directly without touching MonacoEnvironment — the host app's
+    // worker configuration is already correct.
     if (win.monaco) {
       runOnLoad(win.monaco);
       return;
     }
+
+    // Only set MonacoEnvironment when we are responsible for loading Monaco.
+    // Use blob + importScripts to avoid cross-origin Worker restrictions.
+    // The blob URL is same-origin, and importScripts() inside a worker
+    // is not subject to CORS restrictions.
+    (
+      globalThis as unknown as { MonacoEnvironment: unknown }
+    ).MonacoEnvironment = {
+      getWorker(_workerId: string, label: string) {
+        const workerUrl =
+          label === "json"
+            ? `${basePath}/vs/language/json/json.worker.js`
+            : `${basePath}/vs/editor/editor.worker.js`;
+        const blob = new Blob([`importScripts('${workerUrl}');`], {
+          type: "text/javascript",
+        });
+        return new Worker(URL.createObjectURL(blob));
+      },
+    };
 
     // If AMD require is already available, skip loading loader.js
     if (win.require) {
