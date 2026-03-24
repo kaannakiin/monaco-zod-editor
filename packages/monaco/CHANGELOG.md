@@ -1,5 +1,11 @@
 # @zod-monaco/monaco
 
+## 1.0.5
+
+### Patch Changes
+
+- Set MonacoEnvironment only when loading Monaco ourselves; use importScripts blob worker to avoid cross-origin Worker restrictions.
+
 ## 1.0.4
 
 ### Patch Changes
