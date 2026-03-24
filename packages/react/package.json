@@ -1,6 +1,6 @@
 {
   "name": "@zod-monaco/react",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "React component for Zod-powered Monaco JSON editor",
   "license": "MIT",
   "author": "Kaan Akin",

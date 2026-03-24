@@ -1,6 +1,6 @@
 {
   "name": "@zod-monaco/e2e",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "scripts": {
