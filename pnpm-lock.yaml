@@ -272,6 +272,9 @@ importers:
 
   packages/vue:
     dependencies:
+      '@zod-monaco/core':
+        specifier: workspace:*
+        version: link:../core
       '@zod-monaco/monaco':
         specifier: workspace:*
         version: link:../monaco
