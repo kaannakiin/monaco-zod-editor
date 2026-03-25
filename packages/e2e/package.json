@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
-    "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "typescript": "5.9.2",
     "vitest": "^4.0.18"
