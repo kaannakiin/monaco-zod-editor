@@ -36,6 +36,8 @@ export type { ZodIssue } from "@zod-monaco/core";
 export type {
   MonacoDisposable,
   MonacoPosition,
+  MonacoRange,
+  MonacoSelection,
   MonacoModelLike,
   MonacoEditorChangeEvent,
   MonacoStandaloneEditorLike,
@@ -45,6 +47,7 @@ export type {
   MonacoCompletionContext,
   MonacoJsonDiagnosticsOptions,
   MonacoEditorApi,
+  MonacoLanguageRegistration,
   MonacoApi,
 } from "./monaco-types.js";
 
@@ -282,7 +285,7 @@ class DefaultZodEditorController implements ZodEditorController {
   }
 
   updateOptions(options: Record<string, unknown>): void {
-    (this.#editor as any)?.updateOptions?.(options);
+    this.#editor?.updateOptions?.(options);
   }
 
   getMonaco(): RawMonaco {
