@@ -57,6 +57,8 @@ export type { AttachZodOptions, ZodEditorAttachment } from "./attach.js";
 export { getSchemaRegistry } from "./schema-registry.js";
 export type { ZodSchemaRegistry, SchemaRegistration, SchemaEntry } from "./schema-registry.js";
 export { createZodHoverProvider } from "./hover.js";
+export { prepareJsonEdit } from "./json-edit.js";
+export type { PreparedEdit, ValidationIssue } from "./json-edit.js";
 
 const DEFAULT_EDITOR_LANGUAGE = "json";
 

@@ -11,6 +11,8 @@ export interface MonacoModelLike {
   readonly uri: { scheme: string; path: string; toString(): string };
   getValue(): string;
   getPositionAt(offset: number): MonacoPosition;
+  getVersionId(): number;
+  getFullModelRange(): MonacoRange;
   dispose(): void;
 }
 
@@ -50,6 +52,14 @@ export interface MonacoStandaloneEditorLike extends MonacoDisposable {
   setSelections(selections: MonacoSelection[]): void;
   updateOptions(options: Record<string, unknown>): void;
   focus(): void;
+  executeEdits(
+    source: string,
+    edits: Array<{
+      range: MonacoRange;
+      text: string;
+      forceMoveMarkers?: boolean;
+    }>,
+  ): boolean;
 }
 
 export interface MonacoMarkerData {

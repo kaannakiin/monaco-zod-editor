@@ -1,9 +1,5 @@
-import type { SchemaDescriptor } from "@zod-monaco/core";
-import {
-  resolveFieldMetadata,
-  resolveJsonSchemaNode,
-  SchemaCache,
-} from "@zod-monaco/core";
+import type { FieldPath, SchemaDescriptor } from "@zod-monaco/core";
+import { resolveFieldContext, SchemaCache } from "@zod-monaco/core";
 import type {
   MonacoModelLike,
   MonacoPosition,
@@ -57,26 +53,18 @@ export function createZodCompletionProvider(
         return null;
       }
 
-      const schemaNode = cache
-        ? cache.resolveNode(ctx.path)
-        : resolveJsonSchemaNode(descriptor.jsonSchema, ctx.path);
+      // Convert string[] path → FieldPath (coerce numeric-looking segments to number)
+      const fieldPath: FieldPath = ctx.path.map((s) =>
+        /^\d+$/.test(s) ? Number(s) : s,
+      );
+      const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
 
-      if (!schemaNode) {
-        return null;
-      }
-
-      const enumValues = schemaNode.enum as unknown[] | undefined;
+      const enumValues = fieldCtx.typeInfo.enum;
       if (!Array.isArray(enumValues)) {
         return null;
       }
 
-      const meta = resolveFieldMetadata(
-        descriptor.metadata,
-        ctx.path,
-        descriptor.jsonSchema,
-        cache,
-      );
-      const labels = meta?.enumLabels;
+      const labels = fieldCtx.metadata?.enumLabels;
 
       const suggestions: MonacoCompletionItem[] = enumValues.map((val, i) => {
         if (ctx.insideString && typeof val === "string") {

@@ -1,6 +1,6 @@
 {
   "name": "@zod-monaco/core",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Zod v4 runtime bridge for JSON Schema generation and validation",
   "license": "MIT",
   "author": "Kaan Akin",

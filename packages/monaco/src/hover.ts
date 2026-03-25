@@ -1,5 +1,5 @@
-import type { FieldMetadata, SchemaDescriptor } from "@zod-monaco/core";
-import { resolveFieldMetadata, resolveJsonSchemaNode, SchemaCache } from "@zod-monaco/core";
+import type { FieldMetadata, FieldPath, SchemaDescriptor } from "@zod-monaco/core";
+import { resolveFieldContext, SchemaCache } from "@zod-monaco/core";
 import type { MonacoModelLike, MonacoPosition } from "./monaco-types.js";
 import { positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
 import type { LineIndex } from "./json-path-position.js";
@@ -98,29 +98,18 @@ export function createZodHoverProvider(
         return null;
       }
 
-      const meta = resolveFieldMetadata(
-        descriptor.metadata,
-        resolved.path,
-        descriptor.jsonSchema,
-        cache,
+      // Convert string[] path → FieldPath (coerce numeric-looking segments to number)
+      const fieldPath: FieldPath = resolved.path.map((s) =>
+        /^\d+$/.test(s) ? Number(s) : s,
       );
+      const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
 
-      if (!meta) {
+      if (!fieldCtx.metadata) {
         return null;
       }
 
-      const fieldKey = resolved.path.at(-1);
-      let required: boolean | undefined;
-      if (typeof fieldKey === "string") {
-        const parentPath = resolved.path.slice(0, -1);
-        const parentNode = cache
-          ? cache.resolveNode(parentPath)
-          : resolveJsonSchemaNode(descriptor.jsonSchema, parentPath);
-        const requiredArray = parentNode?.required;
-        if (Array.isArray(requiredArray)) {
-          required = requiredArray.includes(fieldKey);
-        }
-      }
+      const meta = fieldCtx.metadata;
+      const required = fieldCtx.required || undefined;
 
       const content = formatFieldMetadataHover(meta, required, locale);
 

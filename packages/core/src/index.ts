@@ -12,6 +12,31 @@ export type {
   ResolvedMetadata,
 } from "./types.js";
 
+export { resolveFieldContext } from "./resolve-field-context.js";
+export type {
+  FieldSegment,
+  FieldPath,
+  FieldTypeInfo,
+  UnionBranchSummary,
+  FieldContext,
+} from "./field-context-types.js";
+export {
+  toJsonPointer,
+  fromJsonPointer,
+  toInternalPath,
+} from "./path-utils.js";
+
+export { buildFieldCatalog } from "./field-catalog.js";
+export type {
+  FieldCatalogEntry,
+  FieldCatalog,
+  CatalogOptions,
+  CatalogBranch,
+} from "./field-catalog.js";
+
+export { computeJsonDiff } from "./json-diff.js";
+export type { FieldDiff, DiffAction } from "./json-diff.js";
+
 export {
   treeNodeDescriptor,
   treeNodeDefaultValue,
