@@ -54,8 +54,6 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
       resolve(monaco);
     };
 
-    // Ensure a working getWorker is always available.
-    // Use blob + importScripts to avoid cross-origin Worker restrictions.
     const env = globalThis as unknown as {
       MonacoEnvironment?: { getWorker?: unknown };
     };
@@ -84,14 +82,11 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
       };
     }
 
-    // If Monaco is already loaded (e.g., by another library like @ng-util/monaco-editor),
-    // reuse it directly without loading scripts again.
     if (win.monaco) {
       runOnLoad(win.monaco);
       return;
     }
 
-    // If AMD require is already available, skip loading loader.js
     if (win.require) {
       win.require.config({ paths: { vs: `${basePath}/vs` } });
       win.require(

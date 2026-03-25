@@ -1,6 +1,6 @@
 {
   "name": "angular-web",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "scripts": {
     "ng": "ng",
     "dev": "ng serve --port 4201",
@@ -20,8 +20,8 @@
     "@angular/forms": "^21.2.0",
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
-    "@zod-monaco/angular": "workspace:*",
     "@zod-monaco/core": "workspace:*",
+    "@zod-monaco/monaco": "workspace:*",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zod": "^4.0.0"

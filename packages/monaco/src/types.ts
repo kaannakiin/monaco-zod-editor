@@ -1,3 +1,10 @@
+import type { ZodIssue } from "@zod-monaco/core";
+
+export interface ValidationResult {
+  valid: boolean;
+  issues: ZodIssue[];
+}
+
 export interface FeatureToggles {
   /** Enable/disable hover tooltips from JSON Schema. Default: true */
   hover?: boolean;

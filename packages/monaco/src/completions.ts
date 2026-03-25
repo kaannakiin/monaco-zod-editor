@@ -1,5 +1,9 @@
 import type { SchemaDescriptor } from "@zod-monaco/core";
-import { resolveFieldMetadata, resolveJsonSchemaNode } from "@zod-monaco/core";
+import {
+  resolveFieldMetadata,
+  resolveJsonSchemaNode,
+  SchemaCache,
+} from "@zod-monaco/core";
 import type {
   MonacoModelLike,
   MonacoPosition,
@@ -12,6 +16,7 @@ import {
   getValueContext,
   makePosition,
 } from "./json-path-position.js";
+import type { LineIndex } from "./json-path-position.js";
 
 export interface ZodCompletionProvider {
   provideCompletionItems(
@@ -21,12 +26,13 @@ export interface ZodCompletionProvider {
   ): MonacoCompletionList | null;
 }
 
-// Monaco CompletionItemKind.EnumMember = 17
 const ENUM_MEMBER_KIND = 17;
 
 export function createZodCompletionProvider(
   descriptor: SchemaDescriptor,
   modelUri: string,
+  cache?: SchemaCache,
+  getLineIndex?: () => LineIndex | null,
 ): ZodCompletionProvider {
   return {
     provideCompletionItems(
@@ -38,10 +44,12 @@ export function createZodCompletionProvider(
       }
 
       const text = model.getValue();
+      const idx = getLineIndex?.() ?? undefined;
       const offset = positionToOffset(
         text,
         position.lineNumber,
         position.column,
+        idx,
       );
       const ctx = getValueContext(text, offset);
 
@@ -49,7 +57,9 @@ export function createZodCompletionProvider(
         return null;
       }
 
-      const schemaNode = resolveJsonSchemaNode(descriptor.jsonSchema, ctx.path);
+      const schemaNode = cache
+        ? cache.resolveNode(ctx.path)
+        : resolveJsonSchemaNode(descriptor.jsonSchema, ctx.path);
 
       if (!schemaNode) {
         return null;
@@ -64,13 +74,13 @@ export function createZodCompletionProvider(
         descriptor.metadata,
         ctx.path,
         descriptor.jsonSchema,
+        cache,
       );
       const labels = meta?.enumLabels;
 
       const suggestions: MonacoCompletionItem[] = enumValues.map((val, i) => {
         if (ctx.insideString && typeof val === "string") {
-          // Cursor is inside quotes — insert raw value and replace inner content
-          const range = makePosition(text, ctx.innerStart, ctx.innerEnd);
+          const range = makePosition(text, ctx.innerStart, ctx.innerEnd, idx);
           return {
             label: String(val),
             kind: ENUM_MEMBER_KIND,
@@ -81,8 +91,7 @@ export function createZodCompletionProvider(
           };
         }
 
-        // Cursor is not inside a string — replace the entire value token
-        const range = makePosition(text, ctx.valueStart, ctx.valueEnd);
+        const range = makePosition(text, ctx.valueStart, ctx.valueEnd, idx);
         return {
           label: String(val),
           kind: ENUM_MEMBER_KIND,

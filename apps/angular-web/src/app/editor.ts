@@ -11,14 +11,17 @@ import {
 } from '@angular/core';
 import { treeNodeDescriptor, treeNodeDefaultValue } from '@zod-monaco/core';
 import {
-  createZodMonacoAngularController,
   loadMonaco,
+  attachZodToEditor,
+  createZodEditorController,
   type BreadcrumbSegment,
   type MonacoDisposable,
   type ValidationResult,
-  type ZodIssue,
-  type ZodMonacoAngularController,
-} from '@zod-monaco/angular';
+  type ZodEditorController,
+  type ZodEditorAttachment,
+  type MonacoStandaloneEditorLike,
+} from '@zod-monaco/monaco';
+import type { ZodIssue } from '@zod-monaco/core';
 
 @Component({
   selector: 'app-editor',
@@ -157,7 +160,7 @@ export class EditorComponent implements OnDestroy {
   readonly issues = signal<ZodIssue[]>([]);
   readonly breadcrumbs = signal<BreadcrumbSegment[]>([]);
 
-  #controller: ZodMonacoAngularController | null = null;
+  #controller: ZodEditorController | null = null;
   #validationSubscription: MonacoDisposable | null = null;
   #cursorPathSubscription: MonacoDisposable | null = null;
 
@@ -170,7 +173,7 @@ export class EditorComponent implements OnDestroy {
   async #initEditor(): Promise<void> {
     const monaco = await loadMonaco();
 
-    this.#controller = createZodMonacoAngularController({
+    this.#controller = createZodEditorController({
       monaco,
       descriptor: treeNodeDescriptor,
       value: treeNodeDefaultValue,

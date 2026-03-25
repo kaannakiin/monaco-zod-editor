@@ -4,7 +4,7 @@
   "commit": false,
   "fixed": [],
   "linked": [
-    ["@zod-monaco/core", "@zod-monaco/monaco", "@zod-monaco/react", "@zod-monaco/vue", "@zod-monaco/angular"]
+    ["@zod-monaco/core", "@zod-monaco/monaco"]
   ],
   "access": "public",
   "baseBranch": "main",

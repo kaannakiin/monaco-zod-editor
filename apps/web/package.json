@@ -1,6 +1,6 @@
 {
   "name": "web",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@zod-monaco/core": "workspace:*",
-    "@zod-monaco/react": "workspace:*",
+    "@zod-monaco/monaco": "workspace:*",
     "next": "16.1.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

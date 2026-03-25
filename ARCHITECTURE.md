@@ -2,25 +2,21 @@
 
 ## Current Shape
 
-- `@zod-monaco/core`: placeholder package for the future Zod v4 bridge
-- `@zod-monaco/monaco`: minimal controller that mounts Monaco in JSON mode
-- `@zod-monaco/react`: React wrapper around the controller
-- `@zod-monaco/vue`: Vue-flavored controller wrapper
-- `@zod-monaco/angular`: Angular-flavored controller wrapper
-- `apps/web`: repo-status page, not a runtime feature demo
-
-## Target Shape
-
-- `core` will own Zod v4 schema input, JSON Schema generation, metadata
-  normalization, and runtime validation.
-- `monaco` will stay a thin adapter that configures Monaco JSON services and
-  translates validation results into editor markers.
-- Framework packages will stay thin and should not duplicate validation logic.
+- `@zod-monaco/core`: Zod v4 → JSON Schema bridge with field-level metadata,
+  schema traversal, and runtime validation.
+- `@zod-monaco/monaco`: framework-agnostic Monaco controller with JSON Schema
+  validation, Zod runtime diagnostics, hover tooltips, auto-completions,
+  breadcrumb navigation, and `attachZodToEditor()` headless API for attaching
+  Zod features to any existing editor instance. A shared schema registry
+  allows multiple editors on the same Monaco namespace.
+- `apps/web`: live JSON editor demo (Next.js)
+- `apps/angular-web`: Angular demo
 
 ## Design Constraints
 
 - JSON is the only editing surface.
 - No custom Monaco language should be added.
-- Metadata should travel separately from the base schema during the first
-  implementation pass.
+- No framework wrapper packages — users integrate directly via
+  `attachZodToEditor()` or `createZodEditorController()`.
+- Metadata should travel separately from the base schema.
 - Compatibility with removed legacy helpers is not a goal.

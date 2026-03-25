@@ -1,7 +1,10 @@
 import type { FieldMetadata, SchemaDescriptor } from "@zod-monaco/core";
-import { resolveFieldMetadata, resolveJsonSchemaNode } from "@zod-monaco/core";
+import { resolveFieldMetadata, resolveJsonSchemaNode, SchemaCache } from "@zod-monaco/core";
 import type { MonacoModelLike, MonacoPosition } from "./monaco-types.js";
 import { positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
+import type { LineIndex } from "./json-path-position.js";
+import type { ZodMonacoLocale } from "./locale.js";
+import { defaultLocale } from "./locale.js";
 
 export interface ZodHoverResult {
   contents: Array<{ value: string }>;
@@ -23,7 +26,9 @@ export interface ZodHoverProvider {
 export function formatFieldMetadataHover(
   meta: FieldMetadata,
   required?: boolean,
+  locale?: ZodMonacoLocale,
 ): string {
+  const l = locale ?? defaultLocale;
   const parts: string[] = [];
 
   if (meta.title) {
@@ -31,7 +36,7 @@ export function formatFieldMetadataHover(
   }
 
   if (required !== undefined) {
-    parts.push(required ? "**Required**" : "*Optional*");
+    parts.push(required ? `**${l.required}**` : `*${l.optional}*`);
   }
 
   if (meta.description) {
@@ -42,18 +47,18 @@ export function formatFieldMetadataHover(
     const formatted = meta.examples
       .map((ex) => `\`${JSON.stringify(ex)}\``)
       .join(", ");
-    parts.push(`**Examples:** ${formatted}`);
+    parts.push(`**${l.examples}:** ${formatted}`);
   }
 
   if (meta.placeholder) {
-    parts.push(`**Placeholder:** ${meta.placeholder}`);
+    parts.push(`**${l.placeholder}:** ${meta.placeholder}`);
   }
 
   if (meta.enumLabels) {
     const entries = Object.entries(meta.enumLabels)
       .map(([key, label]) => `${label} (\`${key}\`)`)
       .join(", ");
-    parts.push(`**Enum values:** ${entries}`);
+    parts.push(`**${l.enumValues}:** ${entries}`);
   }
 
   if (meta.emptyStateHint) {
@@ -66,6 +71,9 @@ export function formatFieldMetadataHover(
 export function createZodHoverProvider(
   descriptor: SchemaDescriptor,
   modelUri: string,
+  locale?: ZodMonacoLocale,
+  cache?: SchemaCache,
+  getLineIndex?: () => LineIndex | null,
 ): ZodHoverProvider {
   return {
     provideHover(
@@ -77,10 +85,12 @@ export function createZodHoverProvider(
       }
 
       const text = model.getValue();
+      const idx = getLineIndex?.() ?? undefined;
       const offset = positionToOffset(
         text,
         position.lineNumber,
         position.column,
+        idx,
       );
       const resolved = resolvePathAtOffset(text, offset);
 
@@ -92,6 +102,7 @@ export function createZodHoverProvider(
         descriptor.metadata,
         resolved.path,
         descriptor.jsonSchema,
+        cache,
       );
 
       if (!meta) {
@@ -102,17 +113,16 @@ export function createZodHoverProvider(
       let required: boolean | undefined;
       if (typeof fieldKey === "string") {
         const parentPath = resolved.path.slice(0, -1);
-        const parentNode = resolveJsonSchemaNode(
-          descriptor.jsonSchema,
-          parentPath,
-        );
+        const parentNode = cache
+          ? cache.resolveNode(parentPath)
+          : resolveJsonSchemaNode(descriptor.jsonSchema, parentPath);
         const requiredArray = parentNode?.required;
         if (Array.isArray(requiredArray)) {
           required = requiredArray.includes(fieldKey);
         }
       }
 
-      const content = formatFieldMetadataHover(meta, required);
+      const content = formatFieldMetadataHover(meta, required, locale);
 
       if (!content) {
         return null;

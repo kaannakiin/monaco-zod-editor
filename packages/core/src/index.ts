@@ -1,6 +1,10 @@
 export { describeSchema } from "./describe-schema.js";
 export { resolveFieldMetadata } from "./resolve-field-metadata.js";
-export { resolveJsonSchemaMetadata, resolveJsonSchemaNode } from "./resolve-json-schema-metadata.js";
+export {
+  resolveJsonSchemaMetadata,
+  resolveJsonSchemaNode,
+} from "./resolve-json-schema-metadata.js";
+export { SchemaCache } from "./schema-cache.js";
 export type {
   SchemaDescriptor,
   SchemaMetadata,
@@ -8,10 +12,11 @@ export type {
   ResolvedMetadata,
 } from "./types.js";
 
-// Example schemas for demos and testing
-export { treeNodeDescriptor, treeNodeDefaultValue } from "./examples/tree-node.js";
+export {
+  treeNodeDescriptor,
+  treeNodeDefaultValue,
+} from "./examples/tree-node.js";
 
-// Re-export Zod types so consumers don't need to import zod separately
 export type {
   ZodError,
   ZodSafeParseResult,

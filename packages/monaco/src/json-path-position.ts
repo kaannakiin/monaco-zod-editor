@@ -6,6 +6,51 @@ export interface JsonPosition {
 }
 
 /**
+ * Pre-computed line offset index for O(1) positionToOffset
+ * and O(log n) offsetToPosition / makePosition.
+ */
+export class LineIndex {
+  #offsets: number[];
+
+  constructor(text: string) {
+    this.#offsets = [0];
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "\n") {
+        this.#offsets.push(i + 1);
+      }
+    }
+  }
+
+  positionToOffset(lineNumber: number, column: number): number {
+    const idx = lineNumber - 1;
+    if (idx < 0 || idx >= this.#offsets.length) return -1;
+    return this.#offsets[idx]! + column - 1;
+  }
+
+  offsetToPosition(offset: number): { line: number; col: number } {
+    let lo = 0;
+    let hi = this.#offsets.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.#offsets[mid]! <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return { line: lo + 1, col: offset - this.#offsets[lo]! + 1 };
+  }
+
+  makePosition(start: number, end: number): JsonPosition {
+    const s = this.offsetToPosition(start);
+    const e = this.offsetToPosition(end);
+    return {
+      startLineNumber: s.line,
+      startColumn: s.col,
+      endLineNumber: e.line,
+      endColumn: e.col,
+    };
+  }
+}
+
+/**
  * Resolves a ZodIssue path (e.g. ["address", "street"] or ["items", 0])
  * to line/column positions within a JSON string.
  *
@@ -14,9 +59,10 @@ export interface JsonPosition {
 export function resolveJsonPath(
   text: string,
   path: PropertyKey[],
+  index?: LineIndex,
 ): JsonPosition | null {
   if (path.length === 0) {
-    return makePosition(text, 0, text.length);
+    return makePosition(text, 0, text.length, index);
   }
 
   let offset = 0;
@@ -36,11 +82,14 @@ export function resolveJsonPath(
   }
 
   const valueEnd = findValueEnd(text, offset);
-  return makePosition(text, offset, valueEnd);
+  return makePosition(text, offset, valueEnd, index);
 }
 
 function skipWhitespace(text: string, pos: number): number {
-  while (pos < text.length && /\s/.test(text[pos]!)) {
+  while (pos < text.length) {
+    const ch = text.charCodeAt(pos);
+    // space=32, tab=9, newline=10, carriage-return=13
+    if (ch !== 32 && ch !== 9 && ch !== 10 && ch !== 13) break;
     pos++;
   }
   return pos;
@@ -138,7 +187,10 @@ function skipValue(text: string, pos: number): number {
     return skipBraced(text, pos, "[", "]");
   }
 
-  while (pos < text.length && !/[,\]}\s]/.test(text[pos]!)) {
+  while (pos < text.length) {
+    const c = text.charCodeAt(pos);
+    // comma=44, ]=93, }=125, space=32, tab=9, newline=10, cr=13
+    if (c === 44 || c === 93 || c === 125 || c === 32 || c === 9 || c === 10 || c === 13) break;
     pos++;
   }
   return pos;
@@ -191,7 +243,45 @@ function parseStringLiteral(
     const ch = text[pos];
     if (ch === "\\") {
       pos++;
-      value += text[pos];
+      const esc = text[pos];
+      switch (esc) {
+        case '"':
+          value += '"';
+          break;
+        case "\\":
+          value += "\\";
+          break;
+        case "/":
+          value += "/";
+          break;
+        case "b":
+          value += "\b";
+          break;
+        case "f":
+          value += "\f";
+          break;
+        case "n":
+          value += "\n";
+          break;
+        case "r":
+          value += "\r";
+          break;
+        case "t":
+          value += "\t";
+          break;
+        case "u": {
+          const hex = text.slice(pos + 1, pos + 5);
+          if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+            value += String.fromCharCode(parseInt(hex, 16));
+            pos += 4;
+          } else {
+            value += esc;
+          }
+          break;
+        }
+        default:
+          value += esc;
+      }
       pos++;
       continue;
     }
@@ -212,7 +302,13 @@ export function positionToOffset(
   text: string,
   lineNumber: number,
   column: number,
+  index?: LineIndex,
 ): number {
+  if (index) {
+    const result = index.positionToOffset(lineNumber, column);
+    return result >= 0 ? result : text.length;
+  }
+
   let line = 1;
   let col = 1;
 
@@ -516,7 +612,12 @@ export function makePosition(
   text: string,
   start: number,
   end: number,
+  index?: LineIndex,
 ): JsonPosition {
+  if (index) {
+    return index.makePosition(start, end);
+  }
+
   let line = 1;
   let col = 1;
 

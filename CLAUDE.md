@@ -14,10 +14,9 @@
 - Do not introduce a custom Monaco language for Zod code.
 - Do not rebuild removed legacy intelligence helpers.
 - Do not preserve compatibility with the deleted custom-language API surface.
-- Keep the package split, but treat it as a fresh start:
+- Two packages only — no framework wrappers:
   - `@zod-monaco/core`: Zod v4 runtime and JSON Schema bridge
-  - `@zod-monaco/monaco`: Monaco JSON adapter and marker wiring
-  - `@zod-monaco/react`: first framework wrapper
+  - `@zod-monaco/monaco`: Monaco JSON adapter, marker wiring, and `attachZodToEditor()` headless API
 
 ## Working Rules
 

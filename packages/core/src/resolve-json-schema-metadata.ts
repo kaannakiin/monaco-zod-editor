@@ -34,15 +34,30 @@ function resolveRef(
 }
 
 /**
- * For anyOf/oneOf (nullable, unions), return the first non-null branch.
+ * For anyOf/oneOf (nullable, unions), return the best matching branch.
+ * When `nextSegment` is provided, prefers branches that contain it as a property
+ * (discriminator-aware selection). Falls back to first non-null branch.
  */
 function resolveUnionBranch(
   node: JsonSchemaNode,
   root: JsonSchemaNode,
   seen: Set<string>,
+  nextSegment?: string,
 ): JsonSchemaNode | null {
   const branches = (node.anyOf ?? node.oneOf) as JsonSchemaNode[] | undefined;
   if (!Array.isArray(branches)) return node;
+
+  if (nextSegment) {
+    for (const branch of branches) {
+      if (branch.type === "null") continue;
+      const resolved = resolveRef(branch, root, new Set(seen));
+      if (!resolved) continue;
+      const props = resolved.properties as JsonSchemaNode | undefined;
+      if (props && typeof props === "object" && nextSegment in props) {
+        return resolved;
+      }
+    }
+  }
 
   for (const branch of branches) {
     if (branch.type === "null") continue;
@@ -69,18 +84,56 @@ function traversePath(
   let current = resolveRef(node, root, seen);
   if (!current) return null;
 
-  current = resolveUnionBranch(current, root, seen);
+  current = resolveUnionBranch(current, root, seen, path[0]);
   if (!current) return null;
 
   if (path.length === 0) return current;
 
   const [segment, ...rest] = path;
 
+  const allOf = current.allOf as JsonSchemaNode[] | undefined;
+  if (Array.isArray(allOf)) {
+    for (const branch of allOf) {
+      const resolved = resolveRef(branch, root, new Set(seen));
+      if (!resolved) continue;
+      const result = traversePath(resolved, root, path, depth + 1);
+      if (result) return result;
+    }
+    return null;
+  }
+
   const properties = current.properties as JsonSchemaNode | undefined;
   if (properties && typeof properties === "object") {
     const child = properties[segment!];
     if (child && typeof child === "object") {
       return traversePath(child as JsonSchemaNode, root, rest, depth + 1);
+    }
+  }
+
+  const additionalProperties = current.additionalProperties;
+  if (
+    additionalProperties &&
+    typeof additionalProperties === "object" &&
+    !(properties && segment! in properties)
+  ) {
+    return traversePath(
+      additionalProperties as JsonSchemaNode,
+      root,
+      rest,
+      depth + 1,
+    );
+  }
+
+  const prefixItems = current.prefixItems as JsonSchemaNode[] | undefined;
+  if (Array.isArray(prefixItems) && /^\d+$/.test(segment!)) {
+    const idx = parseInt(segment!, 10);
+    if (idx < prefixItems.length) {
+      return traversePath(
+        prefixItems[idx] as JsonSchemaNode,
+        root,
+        rest,
+        depth + 1,
+      );
     }
   }
 
