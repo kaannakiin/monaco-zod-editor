@@ -151,6 +151,8 @@ export function attachZodToEditor(
       if (model) {
         monaco.editor.setModelMarkers(model, MARKER_OWNER, []);
       }
+      const vResult: ValidationResult = { valid: true, issues: [] };
+      for (const l of validationListeners) l(vResult);
       return;
     }
 
@@ -164,18 +166,39 @@ export function attachZodToEditor(
   }
 
   function runValidation(): void {
-    if (!descriptor) return;
+    if (!descriptor) {
+      const vResult: ValidationResult = { valid: true, issues: [] };
+      for (const l of validationListeners) l(vResult);
+      return;
+    }
 
     const model = editor.getModel();
-    if (!model) return;
+    if (!model) {
+      const vResult: ValidationResult = { valid: true, issues: [] };
+      for (const l of validationListeners) l(vResult);
+      return;
+    }
 
     const text = model.getValue();
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
-    } catch {
-      monaco.editor.setModelMarkers(model, MARKER_OWNER, []);
+    } catch (e) {
+      const message = e instanceof SyntaxError ? e.message : "Invalid JSON";
+      monaco.editor.setModelMarkers(model, MARKER_OWNER, [
+        {
+          severity: monaco.MarkerSeverity.Error,
+          message,
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 2,
+          source: MARKER_OWNER,
+        },
+      ]);
+      const vResult: ValidationResult = { valid: false, issues: [], parseError: message };
+      for (const l of validationListeners) l(vResult);
       return;
     }
 

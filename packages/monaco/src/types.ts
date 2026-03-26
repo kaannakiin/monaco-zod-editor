@@ -3,6 +3,7 @@ import type { ZodIssue } from "@zod-monaco/core";
 export interface ValidationResult {
   valid: boolean;
   issues: ZodIssue[];
+  parseError?: string;
 }
 
 export interface FeatureToggles {
