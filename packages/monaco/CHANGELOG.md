@@ -1,5 +1,11 @@
 # @zod-monaco/monaco
 
+## 2.1.2
+
+### Patch Changes
+
+- Fix `onValidationChange` listeners not being called on JSON parse errors and other early-return paths in `runValidation`/`scheduleValidation`. Previously, typing invalid JSON would silently clear markers without notifying listeners, leaving UI consumers with stale results. Parse errors now emit a `ValidationResult` with `valid: false` and a `parseError` message. The `ValidationResult` type gains an optional `parseError` field.
+
 ## 1.0.6
 
 ### Patch Changes
