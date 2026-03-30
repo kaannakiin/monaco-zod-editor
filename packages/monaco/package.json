@@ -32,6 +32,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:hover-audit": "vitest run src/__tests__/hover-audit.test.ts",
     "check-types": "tsc -p tsconfig.check.json --noEmit",
     "prepublishOnly": "pnpm run build"
   },

@@ -1,4 +1,9 @@
-import type { FieldMetadata, FieldPath, SchemaDescriptor } from "@zod-monaco/core";
+import type {
+  FieldMetadata,
+  FieldPath,
+  FieldTypeInfo,
+  SchemaDescriptor,
+} from "@zod-monaco/core";
 import { resolveFieldContext, SchemaCache } from "@zod-monaco/core";
 import type { MonacoModelLike, MonacoPosition } from "./monaco-types.js";
 import { positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
@@ -27,6 +32,7 @@ export function formatFieldMetadataHover(
   meta: FieldMetadata,
   required?: boolean,
   locale?: ZodMonacoLocale,
+  typeInfo?: FieldTypeInfo,
 ): string {
   const l = locale ?? defaultLocale;
   const parts: string[] = [];
@@ -41,6 +47,10 @@ export function formatFieldMetadataHover(
 
   if (meta.description) {
     parts.push(meta.description);
+  }
+
+  if (typeInfo?.default !== undefined) {
+    parts.push(`**${l.defaultValue}:** \`${JSON.stringify(typeInfo.default)}\``);
   }
 
   if (meta.examples && meta.examples.length > 0) {
@@ -75,6 +85,41 @@ export function createZodHoverProvider(
   cache?: SchemaCache,
   getLineIndex?: () => LineIndex | null,
 ): ZodHoverProvider {
+  const resolveRequiredState = (
+    fieldPath: FieldPath,
+    required: boolean,
+  ): boolean | undefined => {
+    const lastSegment = fieldPath.at(-1);
+    if (typeof lastSegment !== "string" || fieldPath.length === 0) {
+      return undefined;
+    }
+
+    const parentPath = fieldPath.slice(0, -1);
+    const parentCtx = resolveFieldContext(descriptor, parentPath, cache);
+    const parentNode = parentCtx.schemaNode;
+    if (!parentNode) return undefined;
+
+    // Check top-level properties and allOf branch properties
+    const hasProperty = (node: Record<string, unknown>, key: string): boolean => {
+      const props = node.properties;
+      if (props && typeof props === "object" && Object.prototype.hasOwnProperty.call(props, key)) {
+        return true;
+      }
+      const allOf = node.allOf as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(allOf)) {
+        return allOf.some((branch) => {
+          const bp = branch.properties;
+          return bp && typeof bp === "object" && Object.prototype.hasOwnProperty.call(bp, key);
+        });
+      }
+      return false;
+    };
+
+    return hasProperty(parentNode, lastSegment)
+      ? required
+      : undefined;
+  };
+
   return {
     provideHover(
       model: MonacoModelLike,
@@ -109,9 +154,9 @@ export function createZodHoverProvider(
       }
 
       const meta = fieldCtx.metadata;
-      const required = fieldCtx.required || undefined;
+      const required = resolveRequiredState(fieldPath, fieldCtx.required);
 
-      const content = formatFieldMetadataHover(meta, required, locale);
+      const content = formatFieldMetadataHover(meta, required, locale, fieldCtx.typeInfo);
 
       if (!content) {
         return null;

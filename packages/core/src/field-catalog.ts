@@ -6,8 +6,6 @@ import { toJsonPointer } from "./path-utils.js";
 
 type JsonSchemaNode = Record<string, unknown>;
 
-// ─── Public types ────────────────────────────────────────────────────────────
-
 /** A single branch of a union field (oneOf / anyOf). */
 export interface CatalogBranch {
   /** Discriminator key, e.g. "kind" — present when detectable. */
@@ -76,8 +74,6 @@ export interface CatalogOptions {
   recursionUnrollDepth?: number;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function resolveRef(
   node: JsonSchemaNode,
   root: JsonSchemaNode,
@@ -106,7 +102,6 @@ function resolveNode(
   const resolved = resolveRef(node, root, seen);
   if (!resolved) return null;
 
-  // Merge allOf branches into a single node
   const allOf = resolved.allOf as JsonSchemaNode[] | undefined;
   if (Array.isArray(allOf)) {
     const merged: JsonSchemaNode = { ...resolved };
@@ -115,10 +110,18 @@ function resolveNode(
       const b = resolveRef(branch, root, new Set(seen));
       if (!b) continue;
       if (b.properties && typeof b.properties === "object") {
-        merged.properties = { ...(merged.properties as object ?? {}), ...(b.properties as object) };
+        merged.properties = {
+          ...((merged.properties as object) ?? {}),
+          ...(b.properties as object),
+        };
       }
       if (Array.isArray(b.required)) {
-        merged.required = [...(Array.isArray(merged.required) ? merged.required as unknown[] : []), ...(b.required as unknown[])];
+        merged.required = [
+          ...(Array.isArray(merged.required)
+            ? (merged.required as unknown[])
+            : []),
+          ...(b.required as unknown[]),
+        ];
       }
     }
     return merged;
@@ -139,9 +142,7 @@ function getValueAtPath(value: unknown, path: FieldPath): unknown {
 }
 
 /** Detect discriminator key for a set of oneOf/anyOf branches. */
-function detectDiscriminator(
-  branches: JsonSchemaNode[],
-): string | undefined {
+function detectDiscriminator(branches: JsonSchemaNode[]): string | undefined {
   const nonNull = branches.filter((b) => b.type !== "null");
   if (nonNull.length < 2) return undefined;
 
@@ -150,17 +151,18 @@ function detectDiscriminator(
     return props ? Object.keys(props) : [];
   });
 
-  // Find a property that all branches have with a `const` value
   const candidates = propSets[0]?.filter((key) =>
     nonNull.every((b) => {
       const props = b.properties as JsonSchemaNode | undefined;
-      return props && key in props && (props[key] as JsonSchemaNode)?.const !== undefined;
-    })
+      return (
+        props &&
+        key in props &&
+        (props[key] as JsonSchemaNode)?.const !== undefined
+      );
+    }),
   );
   return candidates?.[0];
 }
-
-// ─── Walker ──────────────────────────────────────────────────────────────────
 
 interface WalkContext {
   descriptor: SchemaDescriptor;
@@ -191,7 +193,6 @@ function walkNode(
 
   const seen = new Set<string>();
 
-  // Detect recursion: track $ref visits
   const ref = node.$ref as string | undefined;
   let refKey: string | null = null;
 
@@ -199,7 +200,6 @@ function walkNode(
     refKey = ref;
     const count = ctx.refCounts.get(refKey) ?? 0;
     if (count >= ctx.recursionUnrollDepth) {
-      // Cut: emit recursive marker entry
       const ctx2 = resolveFieldContext(ctx.descriptor, path);
       const entry: FieldCatalogEntry = {
         path,
@@ -210,16 +210,17 @@ function walkNode(
       };
       if (ctx2.metadata) {
         if (ctx2.metadata.title) entry.title = ctx2.metadata.title;
-        if (ctx2.metadata.description) entry.description = ctx2.metadata.description;
+        if (ctx2.metadata.description)
+          entry.description = ctx2.metadata.description;
         if (ctx2.metadata.examples) entry.examples = ctx2.metadata.examples;
-        if (ctx2.metadata.enumLabels) entry.enumLabels = ctx2.metadata.enumLabels;
+        if (ctx2.metadata.enumLabels)
+          entry.enumLabels = ctx2.metadata.enumLabels;
       }
       return entry;
     }
     ctx.refCounts.set(refKey, (ctx.refCounts.get(refKey) ?? 0) + 1);
   }
 
-  // Resolve $ref + allOf
   const resolved = resolveNode(node, ctx.root, seen);
 
   let entry: FieldCatalogEntry | null = null;
@@ -267,13 +268,13 @@ function buildEntry(
   const cv = getValueAtPath(ctx.currentValue, path);
   if (cv !== undefined) entry.currentValue = cv;
 
-  // ── anyOf / oneOf: union handling ──────────────────────────────────────────
-  const unionBranches = (resolved.anyOf ?? resolved.oneOf) as JsonSchemaNode[] | undefined;
+  const unionBranches = (resolved.anyOf ?? resolved.oneOf) as
+    | JsonSchemaNode[]
+    | undefined;
   if (Array.isArray(unionBranches)) {
     const nonNullBranches = unionBranches.filter((b) => b.type !== "null");
 
     if (nonNullBranches.length > 1) {
-      // True union — build CatalogBranch entries
       const discriminatorKey = detectDiscriminator(nonNullBranches);
       entry.branches = nonNullBranches.map((branchNode) => {
         const bResolved = resolveNode(branchNode, ctx.root, new Set(seen));
@@ -291,15 +292,22 @@ function buildEntry(
           }
         }
 
-        // Walk branch-specific properties
         const branchFields: FieldCatalogEntry[] = [];
         const props = bResolved.properties as JsonSchemaNode | undefined;
         if (props) {
-          const reqArray = Array.isArray(bResolved.required) ? bResolved.required as string[] : [];
+          const reqArray = Array.isArray(bResolved.required)
+            ? (bResolved.required as string[])
+            : [];
           for (const [key, childNode] of Object.entries(props)) {
             const childPath: FieldPath = [...path, key];
             const childRequired = reqArray.includes(key);
-            const childEntry = walkNode(ctx, childNode as JsonSchemaNode, childPath, childRequired, depth + 1);
+            const childEntry = walkNode(
+              ctx,
+              childNode as JsonSchemaNode,
+              childPath,
+              childRequired,
+              depth + 1,
+            );
             if (childEntry) branchFields.push(childEntry);
           }
         }
@@ -307,34 +315,50 @@ function buildEntry(
         return branch;
       });
 
-      // Branch-specific fields live in entry.branches — not in flat list
       return entry;
     }
 
-    // Single non-null branch = nullable wrapper — unwrap and walk as if it's that type
     const innerNode = nonNullBranches[0];
     if (innerNode) {
-      const innerResolved = resolveNode(innerNode as JsonSchemaNode, ctx.root, new Set(seen));
+      const innerResolved = resolveNode(
+        innerNode as JsonSchemaNode,
+        ctx.root,
+        new Set(seen),
+      );
       if (innerResolved) {
-        return buildEntry(ctx, innerResolved, innerNode as JsonSchemaNode, path, required, depth, seen);
+        return buildEntry(
+          ctx,
+          innerResolved,
+          innerNode as JsonSchemaNode,
+          path,
+          required,
+          depth,
+          seen,
+        );
       }
     }
     return entry;
   }
 
-  // ── object: walk properties ─────────────────────────────────────────────────
   const properties = resolved.properties as JsonSchemaNode | undefined;
   if (properties && typeof properties === "object") {
-    const reqArray = Array.isArray(resolved.required) ? resolved.required as string[] : [];
+    const reqArray = Array.isArray(resolved.required)
+      ? (resolved.required as string[])
+      : [];
     for (const [key, childNode] of Object.entries(properties)) {
       const childPath: FieldPath = [...path, key];
       const childRequired = reqArray.includes(key);
-      const childEntry = walkNode(ctx, childNode as JsonSchemaNode, childPath, childRequired, depth + 1);
+      const childEntry = walkNode(
+        ctx,
+        childNode as JsonSchemaNode,
+        childPath,
+        childRequired,
+        depth + 1,
+      );
       if (childEntry) ctx.fields.push(childEntry);
     }
   }
 
-  // additionalProperties (record schemas)
   const addlProps = resolved.additionalProperties;
   if (addlProps && typeof addlProps === "object" && !Array.isArray(addlProps)) {
     const wildcardPattern = toJsonPointer(path) + "/*";
@@ -342,12 +366,15 @@ function buildEntry(
       path: [...path, "*"] as unknown as FieldPath,
       pointer: null,
       pathPattern: wildcardPattern === "/*" ? "/*" : wildcardPattern,
-      typeInfo: resolveFieldContext(ctx.descriptor, path).typeInfo, // approximate
+      typeInfo: resolveFieldContext(ctx.descriptor, path).typeInfo,
       required: false,
     };
-    // Build proper typeInfo from the additionalProperties node
-    const addlCtx = resolveFieldContext(ctx.descriptor, [...path, "__additionalProperties__"]);
-    // Use a direct approach — addlProps as-is
+
+    const addlCtx = resolveFieldContext(ctx.descriptor, [
+      ...path,
+      "__additionalProperties__",
+    ]);
+
     const addlNode = addlProps as JsonSchemaNode;
     if (typeof addlNode.type === "string") {
       wildcardEntry.typeInfo = { type: addlNode.type, nullable: false };
@@ -355,12 +382,17 @@ function buildEntry(
     ctx.fields.push(wildcardEntry);
   }
 
-  // ── array: items / prefixItems ──────────────────────────────────────────────
   const prefixItems = resolved.prefixItems as JsonSchemaNode[] | undefined;
   if (Array.isArray(prefixItems)) {
     prefixItems.forEach((itemNode, idx) => {
       const itemPath: FieldPath = [...path, idx];
-      const itemEntry = walkNode(ctx, itemNode as JsonSchemaNode, itemPath, true, depth + 1);
+      const itemEntry = walkNode(
+        ctx,
+        itemNode as JsonSchemaNode,
+        itemPath,
+        true,
+        depth + 1,
+      );
       if (itemEntry) ctx.fields.push(itemEntry);
     });
   }
@@ -368,7 +400,13 @@ function buildEntry(
   const items = resolved.items as JsonSchemaNode | undefined;
   if (items && typeof items === "object" && !Array.isArray(items)) {
     const wildcardPattern = toJsonPointer(path) + "/*";
-    const itemEntry = walkItemWildcard(ctx, items, path, wildcardPattern, depth + 1);
+    const itemEntry = walkItemWildcard(
+      ctx,
+      items,
+      path,
+      wildcardPattern,
+      depth + 1,
+    );
     if (itemEntry) ctx.fields.push(itemEntry);
   }
 
@@ -411,8 +449,6 @@ function walkItemWildcard(
     return null;
   }
 
-  // Build a synthetic path for metadata/typeInfo lookup
-  // We use the array path itself since items don't have a fixed key
   const fieldCtx = resolveFieldContext(ctx.descriptor, arrayPath);
   const itemTypeInfo = fieldCtx.typeInfo;
 
@@ -424,15 +460,21 @@ function walkItemWildcard(
     required: false,
   };
 
-  // Walk item properties into flat list
   const properties = resolved.properties as JsonSchemaNode | undefined;
   if (properties) {
-    const reqArray = Array.isArray(resolved.required) ? resolved.required as string[] : [];
+    const reqArray = Array.isArray(resolved.required)
+      ? (resolved.required as string[])
+      : [];
     for (const [key, childNode] of Object.entries(properties)) {
-      // Use a representative concrete path (wildcard path not tracked here)
       const childPath: FieldPath = [...arrayPath, 0, key];
       const childRequired = reqArray.includes(key);
-      const childEntry = walkNode(ctx, childNode as JsonSchemaNode, childPath, childRequired, depth + 1);
+      const childEntry = walkNode(
+        ctx,
+        childNode as JsonSchemaNode,
+        childPath,
+        childRequired,
+        depth + 1,
+      );
       if (childEntry) ctx.fields.push(childEntry);
     }
   }
@@ -440,8 +482,6 @@ function walkItemWildcard(
   if (refKey) ctx.refCounts.set(refKey, (ctx.refCounts.get(refKey) ?? 1) - 1);
   return entry;
 }
-
-// ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
  * Builds a complete field catalog by walking the JSON Schema.
@@ -465,14 +505,16 @@ export function buildFieldCatalog(
 
   const jsonSchema = descriptor.jsonSchema as JsonSchemaNode;
 
-  // Determine start node and path
   let startNode: JsonSchemaNode = jsonSchema;
   let startPath: FieldPath = [];
 
   if (focusPath && focusPath.length > 0) {
     startPath = focusPath;
     const internalPath = focusPath.map(String);
-    const focusNode = resolveJsonSchemaNode(jsonSchema as Record<string, unknown>, internalPath) as JsonSchemaNode | null;
+    const focusNode = resolveJsonSchemaNode(
+      jsonSchema as Record<string, unknown>,
+      internalPath,
+    ) as JsonSchemaNode | null;
     if (focusNode) {
       startNode = focusNode;
     }

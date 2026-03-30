@@ -51,11 +51,14 @@ function resolveRawSchemaNode(
   // Navigate to parent via the existing traversal (which DOES unwrap unions for navigation)
   const parentPath = path.slice(0, -1);
   const lastSegment = path[path.length - 1]!;
-  const parentNode = resolveJsonSchemaNode(
+  const parentNodeRaw = resolveJsonSchemaNode(
     jsonSchema as Record<string, unknown>,
     parentPath,
   ) as JsonSchemaNode | null;
-  if (!parentNode) return null;
+  if (!parentNodeRaw) return null;
+
+  // Merge allOf branches so properties/required from all branches are visible
+  const parentNode = mergeAllOfBranches(parentNodeRaw, jsonSchema);
 
   // Now get the raw child WITHOUT union unwrapping
   const properties = parentNode.properties as JsonSchemaNode | undefined;
@@ -87,6 +90,31 @@ function resolveRawSchemaNode(
 }
 
 type JsonSchemaNode = Record<string, unknown>;
+
+/**
+ * Merges allOf branches into a single node with combined properties and required arrays.
+ * Mirrors the pattern in field-catalog.ts resolveNode().
+ */
+function mergeAllOfBranches(
+  node: JsonSchemaNode,
+  root: JsonSchemaNode,
+): JsonSchemaNode {
+  const allOf = node.allOf as JsonSchemaNode[] | undefined;
+  if (!Array.isArray(allOf)) return node;
+  const merged: JsonSchemaNode = { ...node };
+  delete merged.allOf;
+  for (const branch of allOf) {
+    const b = resolveRefOnly(branch, root);
+    if (!b) continue;
+    if (b.properties && typeof b.properties === "object") {
+      merged.properties = { ...(merged.properties as object ?? {}), ...(b.properties as object) };
+    }
+    if (Array.isArray(b.required)) {
+      merged.required = [...(Array.isArray(merged.required) ? merged.required as unknown[] : []), ...(b.required as unknown[])];
+    }
+  }
+  return merged;
+}
 
 /**
  * Extracts typed constraint information from a raw JSON Schema node.
@@ -161,6 +189,9 @@ function extractTypeInfo(node: JsonSchemaNode | null): FieldTypeInfo {
   if (typeof node.maxItems === "number") info.maxItems = node.maxItems;
   if (typeof node.uniqueItems === "boolean") info.uniqueItems = node.uniqueItems;
 
+  // Default value
+  if (node.default !== undefined) info.default = node.default;
+
   // Object — list property names
   const props = node.properties as JsonSchemaNode | undefined;
   if (props && typeof props === "object") {
@@ -209,10 +240,13 @@ export function resolveFieldContext(
   const lastSegment = path.at(-1);
   if (typeof lastSegment === "string" && path.length > 0) {
     const parentInternalPath = internalPath.slice(0, -1);
-    const parentNode = cache
+    const parentNodeRaw2 = cache
       ? cache.resolveNode(parentInternalPath)
       : resolveJsonSchemaNode(descriptor.jsonSchema, parentInternalPath);
-    const requiredArray = parentNode?.required;
+    const parentNodeMerged = parentNodeRaw2
+      ? mergeAllOfBranches(parentNodeRaw2 as JsonSchemaNode, descriptor.jsonSchema as JsonSchemaNode)
+      : null;
+    const requiredArray = parentNodeMerged?.required;
     if (Array.isArray(requiredArray)) {
       required = requiredArray.includes(lastSegment);
     }

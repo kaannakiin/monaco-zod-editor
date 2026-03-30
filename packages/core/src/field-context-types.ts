@@ -27,6 +27,8 @@ export interface FieldTypeInfo {
   minItems?: number;
   maxItems?: number;
   uniqueItems?: boolean;
+  // Default value from JSON Schema
+  default?: unknown;
   // Object info
   properties?: string[];
   // Union info — present when the node is oneOf/anyOf

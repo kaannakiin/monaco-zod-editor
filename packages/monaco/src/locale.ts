@@ -4,6 +4,7 @@ export interface ZodMonacoLocale {
   examples: string;
   placeholder: string;
   enumValues: string;
+  defaultValue: string;
 }
 
 export const locales = {
@@ -13,6 +14,7 @@ export const locales = {
     examples: "Examples",
     placeholder: "Placeholder",
     enumValues: "Enum values",
+    defaultValue: "Default",
   },
   tr: {
     required: "Zorunlu",
@@ -20,6 +22,7 @@ export const locales = {
     examples: "Örnekler",
     placeholder: "Yer tutucu",
     enumValues: "Enum değerleri",
+    defaultValue: "Varsayılan",
   },
 } satisfies Record<string, ZodMonacoLocale>;
 
