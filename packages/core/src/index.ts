@@ -10,6 +10,9 @@ export type {
   SchemaMetadata,
   FieldMetadata,
   ResolvedMetadata,
+  DeepPaths,
+  FieldsInput,
+  NestedFieldMetadataNode,
 } from "./types.js";
 
 export { resolveFieldContext } from "./resolve-field-context.js";
