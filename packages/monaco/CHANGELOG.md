@@ -1,5 +1,14 @@
 # @zod-monaco/monaco
 
+## 2.2.0
+
+### Patch Changes
+
+- 6845165: Fix hover resolution for allOf/intersection types and render default values in hover tooltips.
+- Updated dependencies [6845165]
+- Updated dependencies [6845165]
+  - @zod-monaco/core@2.2.0
+
 ## 2.1.2
 
 ### Patch Changes
