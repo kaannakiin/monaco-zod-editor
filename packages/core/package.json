@@ -1,6 +1,6 @@
 {
   "name": "@zod-monaco/core",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Zod v4 runtime bridge for JSON Schema generation and validation",
   "license": "MIT",
   "author": "Kaan Akin",
@@ -20,6 +20,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      ".": ["./dist/index.d.ts"]
     }
   },
   "publishConfig": {

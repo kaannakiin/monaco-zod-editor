@@ -1,6 +1,6 @@
 {
   "name": "@zod-monaco/monaco",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Monaco editor adapter with Zod-powered JSON validation, hover, and completions",
   "license": "MIT",
   "author": "Kaan Akin",
@@ -22,6 +22,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      ".": ["./dist/index.d.ts"]
     }
   },
   "publishConfig": {
