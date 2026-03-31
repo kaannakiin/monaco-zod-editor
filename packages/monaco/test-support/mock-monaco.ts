@@ -26,6 +26,7 @@ type HoverProvider = {
 };
 
 type CompletionProvider = {
+  triggerCharacters?: string[];
   provideCompletionItems(
     model: MonacoModelLike,
     position: MonacoPosition,
@@ -66,6 +67,7 @@ export interface MockMonaco extends MonacoApi {
   readonly completionRegistrations: Array<{
     languageSelector: string;
     provider: CompletionProvider;
+    triggerCharacters?: string[];
     disposed: boolean;
   }>;
   readonly diagnosticsHistory: Array<Record<string, unknown>>;
@@ -270,6 +272,7 @@ export function createMockMonaco(): MockMonaco {
         const registration = {
           languageSelector,
           provider,
+          triggerCharacters: provider.triggerCharacters,
           disposed: false,
         };
         completionRegistrations.push(registration);

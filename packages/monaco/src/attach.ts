@@ -1,4 +1,4 @@
-import type { SchemaDescriptor, ZodIssue } from "@zod-monaco/core";
+import type { SchemaDescriptor, SuggestionRefinement, ZodIssue } from "@zod-monaco/core";
 import { SchemaCache } from "@zod-monaco/core";
 import type { FeatureToggles, ValidationResult } from "./types.js";
 import type { ZodMonacoLocale } from "./locale.js";
@@ -32,10 +32,12 @@ export interface AttachZodOptions {
   features?: FeatureToggles;
   locale?: ZodMonacoLocale;
   validationDelay?: number;
+  refinements?: readonly SuggestionRefinement[];
 }
 
 export interface ZodEditorAttachment extends MonacoDisposable {
   setDescriptor(descriptor: SchemaDescriptor | null): void;
+  setRefinements(refinements: readonly SuggestionRefinement[]): void;
   onValidationChange(
     listener: (result: ValidationResult) => void,
   ): MonacoDisposable;
@@ -59,6 +61,7 @@ export function attachZodToEditor(
   const schemaUri = `internal://zod-monaco/${crypto.randomUUID()}.json`;
 
   let descriptor: SchemaDescriptor | null = options.descriptor ?? null;
+  let refinements: readonly SuggestionRefinement[] = options.refinements ?? [];
   let schemaCache: SchemaCache | null = descriptor
     ? new SchemaCache(descriptor.jsonSchema)
     : null;
@@ -141,6 +144,7 @@ export function attachZodToEditor(
         model.uri.toString(),
         schemaCache ?? undefined,
         () => lineIndex,
+        refinements.length > 0 ? refinements : undefined,
       ),
     );
   }
@@ -289,6 +293,11 @@ export function attachZodToEditor(
       registerHoverProvider();
       registerCompletionProvider();
       scheduleValidation();
+    },
+
+    setRefinements(newRefinements: readonly SuggestionRefinement[]): void {
+      refinements = newRefinements;
+      registerCompletionProvider();
     },
 
     onValidationChange(

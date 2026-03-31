@@ -1,5 +1,14 @@
 # web
 
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @zod-monaco/core@3.0.0
+  - @zod-monaco/monaco@3.0.0
+
 ## 2.0.2
 
 ### Patch Changes

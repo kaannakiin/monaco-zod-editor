@@ -71,13 +71,14 @@ export const hoverAuditCases = [
         nodeId: z.uuid().describe("Globally unique node identifier"),
       }),
     metadata: {
-      fields: {
-        nodeId: {
+      fields: [
+        {
+          path: ["nodeId"],
           title: "Node ID",
           examples: ["550e8400-e29b-41d4-a716-446655440000"],
           placeholder: "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx",
         },
-      },
+      ],
     },
     sample: {
       nodeId: "550e8400-e29b-41d4-a716-446655440000",
@@ -135,12 +136,13 @@ export const hoverAuditCases = [
           .describe("Lowercase public handle"),
       }),
     metadata: {
-      fields: {
-        nickname: {
+      fields: [
+        {
+          path: ["nickname"],
           title: "Nickname",
           placeholder: "e.g. codex",
         },
-      },
+      ],
     },
     sample: {
       nickname: "codex",
@@ -193,16 +195,18 @@ export const hoverAuditCases = [
           .nullish(),
       }),
     metadata: {
-      fields: {
-        owner: {
+      fields: [
+        {
+          path: ["owner"],
           title: "Owner",
           emptyStateHint: "Leave empty when unassigned.",
         },
-        "owner.email": {
+        {
+          path: ["owner", "email"],
           title: "Owner Email",
           placeholder: "owner@example.com",
         },
-      },
+      ],
     },
     sample: {
       owner: {
@@ -244,11 +248,12 @@ export const hoverAuditCases = [
         theme: z.string().default("system").describe("Theme preference"),
       }),
     metadata: {
-      fields: {
-        theme: {
+      fields: [
+        {
+          path: ["theme"],
           title: "Theme",
         },
-      },
+      ],
     },
     sample: {
       theme: "dark",
@@ -291,8 +296,9 @@ export const hoverAuditCases = [
         status: z.enum(["draft", "published"]).describe("Publishing state"),
       }),
     metadata: {
-      fields: {
-        status: {
+      fields: [
+        {
+          path: ["status"],
           title: "Status",
           examples: ["draft"],
           enumLabels: {
@@ -300,7 +306,7 @@ export const hoverAuditCases = [
             published: "Live content",
           },
         },
-      },
+      ],
     },
     sample: {
       status: "published",
@@ -358,12 +364,13 @@ export const hoverAuditCases = [
         score: z.number().int().min(1).max(9).describe("Score from 1 to 9"),
       }),
     metadata: {
-      fields: {
-        score: {
+      fields: [
+        {
+          path: ["score"],
           title: "Score",
           examples: [1, 5, 9],
         },
-      },
+      ],
     },
     sample: {
       score: 7,
@@ -415,11 +422,12 @@ export const hoverAuditCases = [
           .rest(z.boolean().describe("Trailing toggle")),
       }),
     metadata: {
-      fields: {
-        sequence: {
+      fields: [
+        {
+          path: ["sequence"],
           title: "Sequence",
         },
-      },
+      ],
     },
     sample: {
       sequence: ["alpha", 2, true, false],
@@ -457,12 +465,13 @@ export const hoverAuditCases = [
         ),
       }),
     metadata: {
-      fields: {
-        attributes: {
+      fields: [
+        {
+          path: ["attributes"],
           title: "Attributes",
           description: "Dynamic boolean flags.",
         },
-      },
+      ],
     },
     sample: {
       attributes: {
@@ -510,11 +519,12 @@ export const hoverAuditCases = [
         ]),
       }),
     metadata: {
-      fields: {
-        "content.body": {
+      fields: [
+        {
+          path: ["content", "body"],
           title: "Content Body",
         },
-      },
+      ],
     },
     sample: {
       content: {
@@ -570,11 +580,12 @@ export const hoverAuditCases = [
           ),
       }),
     metadata: {
-      fields: {
-        "filters.limit": {
+      fields: [
+        {
+          path: ["filters", "limit"],
           title: "Limit",
         },
-      },
+      ],
     },
     sample: {
       filters: {

@@ -1,5 +1,41 @@
 # @zod-monaco/monaco
 
+## 3.0.0
+
+### Major Changes
+
+- **`refinements` desteği eklendi.**
+
+  `attachZodToEditor` ve `createZodEditorController` artık `refinements` seçeneğini kabul ediyor. `SuggestionRefinement` ile free-text alanlara runtime completion inject edilebiliyor.
+
+  ```ts
+  attachZodToEditor({
+    monaco,
+    editor,
+    descriptor,
+    refinements: [
+      {
+        path: ["Children", "Content"],
+        suggestions: ["{Name}", "{Price}", "{Category}"],
+        triggerPattern: "\\{",
+      },
+    ],
+  });
+  ```
+
+  **`setRefinements()` eklendi.**
+
+  `ZodEditorAttachment` ve `ZodEditorController` üzerinden suggestion refinements runtime'da güncellenebiliyor — editor yeniden mount edilmeden.
+
+  **Completion önceliği:** JSON Schema enum değerleri her zaman önce gelir. Suggestion refinements yalnızca o path'te enum yoksa gösterilir.
+
+  **BREAKING:** Bu release `@zod-monaco/core`'daki breaking değişikliklerle birlikte geliyor — path girdilerinin segment-array formatına geçirilmesi gerekiyor.
+
+### Patch Changes
+
+- Updated dependencies
+  - @zod-monaco/core@3.0.0
+
 ## 2.2.0
 
 ### Patch Changes

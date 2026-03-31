@@ -1,68 +1,22 @@
-import type { FieldMetadata } from "./types.js";
-
-const FIELD_METADATA_KEYS = new Set([
-  "title",
-  "description",
-  "examples",
-  "placeholder",
-  "enumLabels",
-  "emptyStateHint",
-]);
-
-function isFieldMetadata(value: unknown): value is FieldMetadata {
-  if (typeof value !== "object" || value === null) return false;
-  const keys = Object.keys(value);
-  return keys.length > 0 && keys.every((k) => FIELD_METADATA_KEYS.has(k));
-}
-
-function isNestedFormat(fields: Record<string, unknown>): boolean {
-  return Object.entries(fields).some(([key, v]) => {
-    if (key === "_meta") return true;
-    if (typeof v !== "object" || v === null) return false;
-    return "_meta" in v || !isFieldMetadata(v);
-  });
-}
-
-function flattenNestedFields(
-  nested: Record<string, unknown>,
-  prefix: string = "",
-): Record<string, FieldMetadata> {
-  const result: Record<string, FieldMetadata> = {};
-
-  for (const [key, value] of Object.entries(nested)) {
-    if (key === "_meta") {
-      if (prefix && isFieldMetadata(value)) {
-        result[prefix] = value;
-      }
-      continue;
-    }
-
-    const fullPath = prefix ? `${prefix}.${key}` : key;
-
-    if (typeof value !== "object" || value === null) continue;
-
-    if (isFieldMetadata(value)) {
-      result[fullPath] = value;
-    } else {
-      Object.assign(
-        result,
-        flattenNestedFields(value as Record<string, unknown>, fullPath),
-      );
-    }
-  }
-
-  return result;
-}
+import type { FieldMetadata, FieldMetadataEntry } from "./types.js";
+import { toJsonPointer } from "./path-utils.js";
 
 /**
- * Normalizes field metadata input (flat or nested) into a flat
- * `Record<string, FieldMetadata>` keyed by dot-notation paths.
+ * Converts a field metadata entry list into a pointer-keyed map.
+ * Each entry's `path` (segment array) is converted to an RFC 6901
+ * JSON Pointer string used as the map key. Entries with an empty
+ * path (root) are silently skipped.
  */
-export function normalizeFieldsInput(
-  fields: Record<string, unknown>,
+export function entriesToPointerMap(
+  entries: readonly FieldMetadataEntry[],
 ): Record<string, FieldMetadata> {
-  if (isNestedFormat(fields)) {
-    return flattenNestedFields(fields);
+  const result: Record<string, FieldMetadata> = {};
+  for (const entry of entries) {
+    const pointer = toJsonPointer(entry.path as readonly string[]);
+    if (pointer !== "") {
+      const { path: _, ...meta } = entry;
+      result[pointer] = meta;
+    }
   }
-  return fields as Record<string, FieldMetadata>;
+  return result;
 }

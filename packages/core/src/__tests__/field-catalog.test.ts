@@ -230,5 +230,16 @@ describe("buildFieldCatalog", () => {
       const createdAt = findField(fields, "metadata", "createdAt");
       expect(createdAt!.description).toBe("ISO 8601 creation timestamp");
     });
+
+    test("refinement enum labels are reflected in catalog entry", () => {
+      // treeNodeDescriptor has a refinement on nodeType with labels
+      const { fields } = buildFieldCatalog(descriptor);
+      const nodeType = findField(fields, "nodeType");
+      expect(nodeType!.enumLabels).toEqual({
+        folder: "Folder (container)",
+        file: "File (leaf with content)",
+        symlink: "Symbolic Link (pointer)",
+      });
+    });
   });
 });

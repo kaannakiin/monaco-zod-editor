@@ -1,4 +1,4 @@
-import type { SchemaDescriptor, ZodIssue } from "@zod-monaco/core";
+import type { SchemaDescriptor, SuggestionRefinement, ZodIssue } from "@zod-monaco/core";
 import type { FeatureToggles, ValidationResult } from "./types.js";
 import type { ZodMonacoLocale } from "./locale.js";
 import type { RawMonaco, RawMonacoEditor } from "./raw-types.js";
@@ -52,6 +52,7 @@ export type {
 } from "./monaco-types.js";
 
 export type { ValidationResult } from "./types.js";
+export type { SuggestionRefinement } from "@zod-monaco/core";
 export { attachZodToEditor } from "./attach.js";
 export type { AttachZodOptions, ZodEditorAttachment } from "./attach.js";
 export { getSchemaRegistry } from "./schema-registry.js";
@@ -70,6 +71,7 @@ export interface CreateZodEditorControllerOptions {
   value?: string;
   editorOptions?: Record<string, unknown>;
   validationDelay?: number;
+  refinements?: readonly SuggestionRefinement[];
 }
 
 export interface ZodEditorController extends MonacoDisposable {
@@ -78,6 +80,7 @@ export interface ZodEditorController extends MonacoDisposable {
   getValue(): string;
   setValue(value: string): void;
   setDescriptor(descriptor: SchemaDescriptor | null): void;
+  setRefinements(refinements: readonly SuggestionRefinement[]): void;
   onChange(
     listener: (value: string, event: MonacoEditorChangeEvent) => void,
   ): MonacoDisposable;
@@ -121,6 +124,7 @@ class DefaultZodEditorController implements ZodEditorController {
   #attachValidationDisposable: MonacoDisposable | null = null;
   #attachCursorDisposable: MonacoDisposable | null = null;
   #descriptor: SchemaDescriptor | null;
+  #refinements: readonly SuggestionRefinement[];
   #value: string;
 
   constructor(options: CreateZodEditorControllerOptions) {
@@ -128,6 +132,7 @@ class DefaultZodEditorController implements ZodEditorController {
     this.#editorOptions = options.editorOptions ?? {};
     this.#value = options.value ?? "";
     this.#descriptor = options.descriptor ?? null;
+    this.#refinements = options.refinements ?? [];
     this.#locale = options.locale;
     this.#validationDelay = options.validationDelay;
     this.#features = options.features;
@@ -152,6 +157,7 @@ class DefaultZodEditorController implements ZodEditorController {
       features: this.#features,
       locale: this.#locale,
       validationDelay: this.#validationDelay,
+      refinements: this.#refinements,
     });
 
     this.#changeDisposable = this.#editor.onDidChangeModelContent((event) => {
@@ -201,6 +207,11 @@ class DefaultZodEditorController implements ZodEditorController {
   setDescriptor(descriptor: SchemaDescriptor | null): void {
     this.#descriptor = descriptor;
     this.#attachment?.setDescriptor(descriptor);
+  }
+
+  setRefinements(refinements: readonly SuggestionRefinement[]): void {
+    this.#refinements = refinements;
+    this.#attachment?.setRefinements(refinements);
   }
 
   onChange(

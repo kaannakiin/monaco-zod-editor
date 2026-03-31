@@ -72,17 +72,16 @@ export const treeNodeDescriptor = describeSchema(treeNodeSchema, {
     title: "Tree Node",
     description:
       "Recursive file-system-like tree. Each node can be a folder, file, or symlink with nested children.",
-    fields: {
-      id: {
+    fields: [
+      {
+        path: ["id"],
         title: "Node ID",
         examples: ["550e8400-e29b-41d4-a716-446655440000"],
         placeholder: "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx",
       },
-      label: {
-        title: "Label",
-        placeholder: "e.g. src",
-      },
-      nodeType: {
+      { path: ["label"], title: "Label", placeholder: "e.g. src" },
+      {
+        path: ["nodeType"],
         title: "Node Type",
         enumLabels: {
           folder: "Folder (container)",
@@ -90,37 +89,50 @@ export const treeNodeDescriptor = describeSchema(treeNodeSchema, {
           symlink: "Symbolic Link (pointer)",
         },
       },
-      attributes: {
+      {
+        path: ["attributes"],
         title: "Attributes",
         description: "Free-form key-value pairs.",
         examples: [{ hidden: true, size: 4096, mime: "text/plain" }],
         emptyStateHint: "Add custom attributes to extend node data.",
       },
-      content: {
+      {
+        path: ["content"],
         title: "Content",
         description: 'Discriminated union on "kind": text, binary, or link.',
       },
-      tags: {
+      {
+        path: ["tags"],
         title: "Tags",
         examples: [["important"], ["draft", "needs-review", "v2"]],
       },
-      priority: {
-        title: "Priority",
-        examples: [0, 5, 10, null],
-      },
-      children: {
+      { path: ["priority"], title: "Priority", examples: [0, 5, 10, null] },
+      {
+        path: ["children"],
         title: "Children",
         emptyStateHint: "Add child nodes to build the tree structure.",
       },
-
-      "metadata.createdAt": {
+      {
+        path: ["metadata", "createdAt"],
         placeholder: "e.g. 2026-03-13T10:30:00Z",
       },
-      "metadata.owner": {
+      {
+        path: ["metadata", "owner"],
         emptyStateHint: "Set to null if no owner is assigned.",
       },
-    },
+    ],
   },
+  refinements: [
+    {
+      path: ["nodeType"],
+      enum: ["folder", "file", "symlink"],
+      labels: {
+        folder: "Folder (container)",
+        file: "File (leaf with content)",
+        symlink: "Symbolic Link (pointer)",
+      },
+    },
+  ],
 });
 
 export const treeNodeDefaultValue = JSON.stringify(

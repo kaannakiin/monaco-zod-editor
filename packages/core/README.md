@@ -1,6 +1,6 @@
 # @zod-monaco/core
 
-Zod v4 runtime bridge for JSON Schema generation, field resolution, and AI-ready field catalog.
+Zod v4 runtime bridge for JSON Schema generation, field resolution, enum refinements, and AI-ready field catalog.
 
 ## Installation
 
@@ -8,7 +8,7 @@ Zod v4 runtime bridge for JSON Schema generation, field resolution, and AI-ready
 npm install @zod-monaco/core zod
 ```
 
-## Usage
+## Quick Start
 
 ```ts
 import { z } from "zod";
@@ -23,10 +23,10 @@ const descriptor = describeSchema(schema, {
   metadata: {
     title: "User",
     description: "A user record",
-    fields: {
-      name: { title: "Name", description: "Full name" },
-      age: { title: "Age", placeholder: "25" },
-    },
+    fields: [
+      { path: ["name"], title: "Name", description: "Full name" },
+      { path: ["age"], title: "Age", placeholder: "25" },
+    ],
   },
 });
 
@@ -35,6 +35,64 @@ const descriptor = describeSchema(schema, {
 // descriptor.metadata    — resolved field metadata
 ```
 
+## Enum Refinements
+
+Inject dynamic enum values into a field without rebuilding the schema:
+
+```ts
+const descriptor = describeSchema(schema, {
+  metadata,
+  refinements: [
+    {
+      path: ["status"],
+      enum: ["active", "inactive", "pending"],
+      labels: {
+        active: "Active",
+        inactive: "Inactive",
+        pending: "Pending",
+      },
+    },
+  ],
+});
+```
+
+`refinements` are applied to the JSON Schema for completion and hover, and also enforced at runtime by `descriptor.validate()`. Invalid values produce a Zod-compatible `invalid_value` issue.
+
+Arrays are handled automatically — if the target field is inside an array, all array items are validated and issues carry the correct runtime indices:
+
+```ts
+// schema path:  ["items", "status"]
+// runtime issue path for invalid third item: ["items", 2, "status"]
+```
+
+Empty `enum` arrays are silently ignored (no-op). Targeting an object or array node throws.
+
+---
+
+## Recommended Ergonomics
+
+`refinements` is a low-level primitive. For real-world use, a helper that derives refinements from your domain data keeps call sites clean:
+
+```ts
+const runtimeConfig = buildMyRefinements(dtoOptions);
+
+const descriptor = describeSchema(schema, {
+  metadata,
+  refinements: runtimeConfig.schema,
+});
+
+attachZodToEditor({
+  monaco,
+  editor,
+  descriptor,
+  refinements: runtimeConfig.editor,
+});
+```
+
+The refinements data can come from any backend-agnostic source — DTO, OpenAPI, GraphQL, CMS, Prisma, feature flags, or tenant config. The schema stays fixed; field behavior is injected at runtime.
+
+---
+
 ## API
 
 ### `describeSchema(schema, options?)`
@@ -42,8 +100,11 @@ const descriptor = describeSchema(schema, {
 Creates a `SchemaDescriptor` from a Zod v4 schema.
 
 - `schema` — any Zod v4 schema
-- `options.metadata` — optional field-level metadata (title, description, examples, placeholder, enumLabels, emptyStateHint)
+- `options.metadata` — optional schema and field-level metadata
+- `options.refinements` — optional `EnumRefinement<T>[]` for dynamic enum injection
 - `options.toJsonSchemaOptions` — options passed to Zod's `toJSONSchema()`
+
+The returned `descriptor.validate` runs Zod validation followed by an enum refinement pass. Both issue sets are merged into a single `ZodSafeParseResult`.
 
 ---
 
@@ -54,7 +115,7 @@ Resolves the full context for a field — type info, metadata, and required stat
 ```ts
 import { resolveFieldContext } from "@zod-monaco/core";
 
-const ctx = resolveFieldContext(descriptor, ["metadata", "owner", "email"]);
+const ctx = resolveFieldContext(descriptor, ["owner", "email"]);
 ctx.typeInfo.type;       // "string"
 ctx.typeInfo.format;     // "email"
 ctx.typeInfo.nullable;   // false
@@ -131,6 +192,22 @@ Actions: `"added"` | `"removed"` | `"changed"`.
 
 ---
 
+### `matchesSchemaPath(runtimePath, schemaPath)`
+
+Tests whether a runtime `FieldPath` matches a schema-level path. Numeric array indices in the runtime path are skipped — only string segments are compared:
+
+```ts
+import { matchesSchemaPath } from "@zod-monaco/core";
+
+matchesSchemaPath(["items", 0, "status"], ["items", "status"]); // true
+matchesSchemaPath(["items", 2, "status"], ["items", "status"]); // true
+matchesSchemaPath(["name"], ["items", "status"]);               // false
+```
+
+Used by the completions provider to match suggestion refinements against the cursor path.
+
+---
+
 ### `toJsonPointer(path)` / `fromJsonPointer(pointer)`
 
 RFC 6901 JSON Pointer utilities.
@@ -138,9 +215,9 @@ RFC 6901 JSON Pointer utilities.
 ```ts
 import { toJsonPointer, fromJsonPointer } from "@zod-monaco/core";
 
-toJsonPointer(["metadata", "owner", "email"]); // "/metadata/owner/email"
-toJsonPointer(["items", 0, "name"]);            // "/items/0/name"
-toJsonPointer([]);                              // ""
+toJsonPointer(["owner", "email"]);   // "/owner/email"
+toJsonPointer(["items", 0, "name"]); // "/items/0/name"
+toJsonPointer([]);                   // ""
 
 fromJsonPointer("/a~1b/c~0d"); // ["a/b", "c~d"]  — string[], no numeric coercion
 ```
@@ -152,6 +229,51 @@ fromJsonPointer("/a~1b/c~0d"); // ["a/b", "c~d"]  — string[], no numeric coerc
 ### `resolveFieldMetadata(descriptor, path)`
 
 Resolves metadata for a field at a given path, merging explicit metadata with JSON Schema-derived information (two-tier fallback).
+
+---
+
+### `applyEnumRefinements(jsonSchema, refinements)`
+
+Low-level utility that mutates a JSON Schema object in place, injecting `enum` and `x-enumLabels` for each refinement. Called internally by `describeSchema`. Use directly if you manage your own JSON Schema pipeline.
+
+---
+
+## Types
+
+### `SchemaPath<T>`
+
+Type-safe segment array for targeting a field in a schema. Provides IDE autocomplete and compile-time path validation. Depth-capped at 8 levels.
+
+```ts
+import type { SchemaPath } from "@zod-monaco/core";
+
+type MySchema = { user: { address: { city: string } } };
+type P = SchemaPath<MySchema>; // ["user"] | ["user", "address"] | ["user", "address", "city"]
+```
+
+### `EnumRefinement<T>`
+
+```ts
+type EnumRefinement<T> = {
+  path: SchemaPath<T>;
+  enum: readonly string[];
+  labels?: Record<string, string>;
+};
+```
+
+### `FieldMetadataEntry<T>`
+
+```ts
+type FieldMetadataEntry<T> = {
+  path: SchemaPath<T>;
+  title?: string;
+  description?: string;
+  examples?: readonly unknown[];
+  placeholder?: string;
+  enumLabels?: Record<string, string>;
+  emptyStateHint?: string;
+};
+```
 
 ## License
 

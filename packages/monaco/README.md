@@ -1,6 +1,6 @@
 # @zod-monaco/monaco
 
-Monaco editor adapter with Zod-powered JSON validation, hover tooltips, completions, and AI-safe editing.
+Monaco editor adapter with Zod-powered JSON validation, hover tooltips, completions, suggestion refinements, and AI-safe editing.
 
 ## Installation
 
@@ -60,10 +60,46 @@ const controller = createZodEditorController({
     hover: true,        // metadata hover tooltips
     validation: true,   // JSON Schema structural validation
     diagnostics: true,  // Zod runtime validation markers
-    completions: true,  // enum value completions
+    completions: true,  // enum value completions + suggestion refinements
   },
 });
 ```
+
+## Suggestion Refinements
+
+Inject runtime suggestions into free-text fields without touching the schema:
+
+```ts
+const controller = createZodEditorController({
+  monaco,
+  descriptor,
+  refinements: [
+    {
+      path: ["template"],
+      suggestions: ["{Name}", "{Price}", "{Category}"],
+      triggerPattern: "\\{",
+    },
+  ],
+});
+```
+
+`triggerPattern` is a regex string. When provided, suggestions only appear after the text before the cursor matches that pattern. Simple single-character patterns (`"@"`, `"\\{"`) are also registered as Monaco trigger characters — completions open automatically when the user types that character.
+
+Update refinements at runtime without remounting:
+
+```ts
+controller.setRefinements([
+  {
+    path: ["template"],
+    suggestions: ["{Name}", "{Price}"],
+    triggerPattern: "\\{",
+  },
+]);
+```
+
+**Completion priority:** Enum values from the JSON Schema always take precedence. Suggestion refinements are shown only when no enum values exist for the current field.
+
+Suggestion refinements are soft — they do not add validation constraints. For strict enum validation, use `EnumRefinement` in `describeSchema`.
 
 ## Attach to Existing Editor
 
@@ -72,9 +108,17 @@ If you already have a Monaco editor instance, use `attachZodToEditor` to add Zod
 ```ts
 import { attachZodToEditor } from "@zod-monaco/monaco";
 
-const attachment = attachZodToEditor({ monaco, editor, descriptor });
+const attachment = attachZodToEditor({
+  monaco,
+  editor,
+  descriptor,
+  refinements: [
+    { path: ["content"], suggestions: ["{Name}", "{Price}"], triggerPattern: "\\{" },
+  ],
+});
 
 attachment.setDescriptor(anotherDescriptor); // swap schema at runtime
+attachment.setRefinements([...]);            // update suggestions at runtime
 attachment.onValidationChange((result) => console.log(result));
 attachment.dispose(); // removes Zod features, does NOT dispose the editor
 ```
@@ -134,7 +178,7 @@ Available built-ins: `locales.en` (default), `locales.tr`.
 
 ## Multiple Editors
 
-Multiple editors sharing the same Monaco instance are supported. Each editor's schema is managed through an internal registry — disposing one does not affect others.
+Multiple editors sharing the same Monaco instance are supported. Each editor's schema is managed through an internal registry — disposing one does not affect others — no extra setup required.
 
 ## API
 
@@ -143,6 +187,7 @@ Multiple editors sharing the same Monaco instance are supported. Each editor's s
 - `mount(element)` — mount editor to a DOM element
 - `getValue()` / `setValue(value)` — read/write editor content
 - `setDescriptor(descriptor)` — update schema without remounting
+- `setRefinements(refinements)` — update suggestion refinements at runtime
 - `onChange(listener)` — subscribe to content changes
 - `onValidationChange(listener)` — subscribe to validation results
 - `onCursorPathChange(listener)` — subscribe to breadcrumb path changes
@@ -152,6 +197,16 @@ Multiple editors sharing the same Monaco instance are supported. Each editor's s
 - `updateOptions(options)` — update editor options at runtime
 - `getMonaco()` / `getRawEditor()` — escape hatch to native Monaco APIs
 - `dispose()` — cleanup
+
+### `attachZodToEditor(options)`
+
+Returns a `ZodEditorAttachment`:
+
+- `setDescriptor(descriptor)` — swap schema at runtime
+- `setRefinements(refinements)` — update suggestion refinements at runtime
+- `onValidationChange(listener)` — subscribe to validation results
+- `onCursorPathChange(listener)` — subscribe to breadcrumb path changes
+- `dispose()` — remove Zod features (does NOT dispose the editor)
 
 ### `prepareJsonEdit(editor, descriptor, newValue)`
 

@@ -1,10 +1,11 @@
 import type { FieldMetadata, ResolvedMetadata } from "./types.js";
 import { resolveJsonSchemaMetadata } from "./resolve-json-schema-metadata.js";
+import { toJsonPointer } from "./path-utils.js";
 import type { SchemaCache } from "./schema-cache.js";
 
 /**
  * Resolves metadata for a field path using a two-tier fallback:
- * 1. Explicit metadata from `metadata.fields` (dot-notation keys)
+ * 1. Explicit metadata from `metadata.fields` (JSON Pointer keys)
  * 2. JSON Schema title/description/examples (from Zod `.describe()` / `.meta()`)
  *
  * When both exist, explicit metadata fields override JSON Schema fallback.
@@ -21,7 +22,7 @@ export function resolveFieldMetadata(
     return Object.keys(topLevel).length > 0 ? topLevel : undefined;
   }
 
-  const explicit = metadata.fields[path.join(".")];
+  const explicit = metadata.fields[toJsonPointer(path)];
   const schemaFallback = cache
     ? cache.resolveMetadata(path)
     : jsonSchema

@@ -1,125 +1,66 @@
 import { describe, test, expect } from "vitest";
-import { normalizeFieldsInput } from "../flatten-fields.js";
+import { entriesToPointerMap } from "../flatten-fields.js";
 
-describe("normalizeFieldsInput", () => {
-  describe("flat format passthrough", () => {
-    test("returns flat record unchanged", () => {
-      const fields = {
-        name: { title: "Name" },
-        "address.street": { title: "Street" },
-      };
-      expect(normalizeFieldsInput(fields)).toEqual(fields);
-    });
-
-    test("handles empty object", () => {
-      expect(normalizeFieldsInput({})).toEqual({});
+describe("entriesToPointerMap", () => {
+  test("converts entry list to pointer-keyed map", () => {
+    const entries = [
+      { path: ["name"], title: "Name" },
+      { path: ["address", "street"], title: "Street" },
+    ];
+    expect(entriesToPointerMap(entries)).toEqual({
+      "/name": { title: "Name" },
+      "/address/street": { title: "Street" },
     });
   });
 
-  describe("nested format flattening", () => {
-    test("flattens single level with _meta", () => {
-      const fields = {
-        Root: {
-          _meta: { title: "Root Element" },
-          Type: { title: "Root Type" },
-          Name: { title: "Root Name" },
-        },
-      };
-      expect(normalizeFieldsInput(fields)).toEqual({
-        Root: { title: "Root Element" },
-        "Root.Type": { title: "Root Type" },
-        "Root.Name": { title: "Root Name" },
-      });
-    });
+  test("returns empty object for empty array", () => {
+    expect(entriesToPointerMap([])).toEqual({});
+  });
 
-    test("flattens deeply nested structures", () => {
-      const fields = {
-        Root: {
-          _meta: { title: "Root" },
-          Resources: {
-            _meta: { title: "Resources" },
-            Name: { title: "Resource Name" },
-          },
-        },
-      };
-      expect(normalizeFieldsInput(fields)).toEqual({
-        Root: { title: "Root" },
-        "Root.Resources": { title: "Resources" },
-        "Root.Resources.Name": { title: "Resource Name" },
-      });
+  test("skips entries with empty path (root)", () => {
+    const entries = [
+      { path: [] as string[], title: "Root" },
+      { path: ["name"], title: "Name" },
+    ];
+    expect(entriesToPointerMap(entries)).toEqual({
+      "/name": { title: "Name" },
     });
+  });
 
-    test("handles nested nodes without _meta", () => {
-      const fields = {
-        address: {
-          street: { title: "Street" },
-          city: { title: "City" },
-        },
-      };
-      expect(normalizeFieldsInput(fields)).toEqual({
-        "address.street": { title: "Street" },
-        "address.city": { title: "City" },
-      });
+  test("preserves all FieldMetadata properties", () => {
+    const entries = [
+      {
+        path: ["node"],
+        title: "Node",
+        description: "A tree node",
+        examples: [{ id: "1" }],
+        placeholder: "Enter node",
+        enumLabels: { a: "Label A" },
+        emptyStateHint: "Add a node",
+      },
+    ];
+    expect(entriesToPointerMap(entries)).toEqual({
+      "/node": {
+        title: "Node",
+        description: "A tree node",
+        examples: [{ id: "1" }],
+        placeholder: "Enter node",
+        enumLabels: { a: "Label A" },
+        emptyStateHint: "Add a node",
+      },
     });
+  });
 
-    test("handles mixed _meta and children", () => {
-      const fields = {
-        Children: {
-          _meta: { title: "Children", description: "All UI elements" },
-          GridSettings: {
-            _meta: { title: "Grid Position" },
-            Row: { title: "Row Index", description: "Grid row index" },
-            Column: { title: "Column Index" },
-          },
-          Type: { title: "Element Type" },
-        },
-      };
-      expect(normalizeFieldsInput(fields)).toEqual({
-        Children: { title: "Children", description: "All UI elements" },
-        "Children.GridSettings": { title: "Grid Position" },
-        "Children.GridSettings.Row": {
-          title: "Row Index",
-          description: "Grid row index",
-        },
-        "Children.GridSettings.Column": { title: "Column Index" },
-        "Children.Type": { title: "Element Type" },
-      });
-    });
-
-    test("ignores _meta at root level (no prefix)", () => {
-      const fields = {
-        _meta: { title: "Should be ignored" },
-        name: { title: "Name" },
-      };
-      // _meta at root has no prefix, so it is skipped
-      expect(normalizeFieldsInput(fields)).toEqual({
-        name: { title: "Name" },
-      });
-    });
-
-    test("preserves all FieldMetadata properties", () => {
-      const fields = {
-        node: {
-          _meta: {
-            title: "Node",
-            description: "A tree node",
-            examples: [{ id: "1" }],
-            placeholder: "Enter node",
-            enumLabels: { a: "Label A" },
-            emptyStateHint: "Add a node",
-          },
-        },
-      };
-      expect(normalizeFieldsInput(fields)).toEqual({
-        node: {
-          title: "Node",
-          description: "A tree node",
-          examples: [{ id: "1" }],
-          placeholder: "Enter node",
-          enumLabels: { a: "Label A" },
-          emptyStateHint: "Add a node",
-        },
-      });
+  test("handles multiple entries with nested paths", () => {
+    const entries = [
+      { path: ["a"], title: "A" },
+      { path: ["a", "b"], title: "B" },
+      { path: ["a", "b", "c"], title: "C" },
+    ];
+    expect(entriesToPointerMap(entries)).toEqual({
+      "/a": { title: "A" },
+      "/a/b": { title: "B" },
+      "/a/b/c": { title: "C" },
     });
   });
 });

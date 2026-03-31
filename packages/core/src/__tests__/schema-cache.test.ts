@@ -52,6 +52,20 @@ describe("SchemaCache", () => {
     expect(cache.resolveMetadata(["address", "street"])).toBeUndefined();
     expect(cache.resolveMetadata(["address", "street"])).toBeUndefined();
   });
+
+  test("paths with special characters do not collide in cache", () => {
+    const cache = new SchemaCache(js);
+    // ["a", "b"] → pointer "/a/b"
+    // ["a/b"]    → pointer "/a~1b"
+    // With old \0 join both would be different too, but with pointer
+    // encoding they are guaranteed distinct even for "/" in segments.
+    const r1 = cache.resolveNode(["name"]);
+    const r2 = cache.resolveNode(["address", "street"]);
+    expect(r1).not.toEqual(r2);
+    // Verify caching still works after the key format change
+    expect(cache.resolveNode(["name"])).toBe(r1);
+    expect(cache.resolveNode(["address", "street"])).toBe(r2);
+  });
 });
 
 describe("resolveFieldMetadata with cache", () => {
@@ -59,7 +73,7 @@ describe("resolveFieldMetadata with cache", () => {
     z.object({ name: z.string().describe("Schema desc") }),
   );
   const metadata: ResolvedMetadata = {
-    fields: { name: { title: "Custom" } },
+    fields: { "/name": { title: "Custom" } },
   };
 
   test("cache parameter produces same result as jsonSchema parameter", () => {

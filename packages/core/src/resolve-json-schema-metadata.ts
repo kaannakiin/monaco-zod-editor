@@ -171,6 +171,12 @@ function extractMetadata(node: JsonSchemaNode): FieldMetadata | undefined {
     hasAny = true;
   }
 
+  const xLabels = node["x-enumLabels"];
+  if (xLabels && typeof xLabels === "object" && !Array.isArray(xLabels)) {
+    meta.enumLabels = xLabels as Record<string, string>;
+    hasAny = true;
+  }
+
   return hasAny ? meta : undefined;
 }
 

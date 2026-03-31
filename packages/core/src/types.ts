@@ -9,43 +9,50 @@ export interface FieldMetadata {
   emptyStateHint?: string;
 }
 
-/** Recursive dot-notation path union, depth-capped at 10. */
-export type DeepPaths<T, D extends number[] = []> =
-  D["length"] extends 10
+/**
+ * Type-safe segment-array path union for schema-level targeting.
+ * Arrays are traversed into their element type (no numeric indices).
+ * Depth-capped at 8 to keep TypeScript happy with recursive schemas.
+ */
+export type SchemaPath<T, D extends number[] = []> =
+  D["length"] extends 8
     ? never
     : T extends readonly (infer E)[]
-      ? DeepPaths<E, [...D, 0]>
+      ? SchemaPath<E, [...D, 0]>
       : T extends Record<string, unknown>
         ? {
             [K in Extract<keyof T, string>]:
-              | K
-              | `${K}.${DeepPaths<NonNullable<T[K]>, [...D, 0]>}`;
+              | readonly [K]
+              | readonly [K, ...SchemaPath<NonNullable<T[K]>, [...D, 0]>];
           }[Extract<keyof T, string>]
         : never;
 
-/** Nested object input — `_meta` for self-metadata, named keys for children. */
-export type NestedFieldMetadataNode<T, D extends number[] = []> =
-  D["length"] extends 10
-    ? FieldMetadata
-    : T extends readonly (infer E)[]
-      ? { _meta?: FieldMetadata } & NestedFieldMetadataNode<E, [...D, 0]>
-      : T extends Record<string, unknown>
-        ? { _meta?: FieldMetadata } & {
-            [K in Extract<keyof T, string>]?: NonNullable<
-              T[K]
-            > extends Record<string, unknown>
-              ? NestedFieldMetadataNode<NonNullable<T[K]>, [...D, 0]>
-              : FieldMetadata;
-          }
-        : FieldMetadata;
-
-/** Accepts flat dot-notation record OR nested object with `_meta`. */
-export type FieldsInput<T> =
-  | Partial<Record<DeepPaths<T> | (string & {}), FieldMetadata>>
-  | NestedFieldMetadataNode<T>;
+/** A single field metadata entry with a type-safe segment-array path. */
+export type FieldMetadataEntry<T = unknown> = FieldMetadata & {
+  path: SchemaPath<T> extends never ? readonly string[] : SchemaPath<T>;
+};
 
 export type SchemaMetadata<T = unknown> = FieldMetadata & {
-  fields?: FieldsInput<T>;
+  fields?: readonly FieldMetadataEntry<T>[];
+};
+
+/** Runtime enum constraint injected into a JSON Schema node. */
+export type EnumRefinement<T = unknown> = {
+  path: SchemaPath<T> extends never ? readonly string[] : SchemaPath<T>;
+  enum: readonly string[];
+  labels?: Record<string, string>;
+};
+
+/** Runtime suggestion refinement for free-text fields. Soft completions only — no validation. */
+export type SuggestionRefinement<T = unknown> = {
+  path: SchemaPath<T> extends never ? readonly string[] : SchemaPath<T>;
+  suggestions: readonly string[];
+  /**
+   * Optional regex pattern. When present, suggestions only appear if the text
+   * before the cursor matches this pattern.
+   * Example: "\\{" triggers suggestions when user types `{`.
+   */
+  triggerPattern?: string;
 };
 
 export type ResolvedMetadata<K extends string = string> = FieldMetadata & {

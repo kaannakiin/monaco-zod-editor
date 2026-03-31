@@ -9,11 +9,13 @@ export type {
   SchemaDescriptor,
   SchemaMetadata,
   FieldMetadata,
+  FieldMetadataEntry,
   ResolvedMetadata,
-  DeepPaths,
-  FieldsInput,
-  NestedFieldMetadataNode,
+  SchemaPath,
+  EnumRefinement,
+  SuggestionRefinement,
 } from "./types.js";
+export { applyEnumRefinements } from "./apply-refinements.js";
 
 export { resolveFieldContext } from "./resolve-field-context.js";
 export type {
@@ -27,6 +29,7 @@ export {
   toJsonPointer,
   fromJsonPointer,
   toInternalPath,
+  matchesSchemaPath,
 } from "./path-utils.js";
 
 export { buildFieldCatalog } from "./field-catalog.js";

@@ -3,6 +3,7 @@ import {
   resolveJsonSchemaNode,
   resolveJsonSchemaMetadata,
 } from "./resolve-json-schema-metadata.js";
+import { toJsonPointer } from "./path-utils.js";
 
 /**
  * Caches resolved JSON Schema nodes and metadata by path.
@@ -18,7 +19,7 @@ export class SchemaCache {
   }
 
   resolveNode(path: string[]): Record<string, unknown> | null {
-    const key = path.join("\0");
+    const key = toJsonPointer(path);
     if (this.#nodeCache.has(key)) {
       return this.#nodeCache.get(key)!;
     }
@@ -28,7 +29,7 @@ export class SchemaCache {
   }
 
   resolveMetadata(path: string[]): FieldMetadata | undefined {
-    const key = path.join("\0");
+    const key = toJsonPointer(path);
     if (this.#metadataCache.has(key)) {
       return this.#metadataCache.get(key);
     }

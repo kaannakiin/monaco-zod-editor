@@ -92,6 +92,7 @@ export interface MonacoCompletionList {
 
 export interface MonacoCompletionContext {
   triggerKind: number;
+  triggerCharacter?: string;
 }
 
 export interface MonacoJsonDiagnosticsOptions {
@@ -165,6 +166,7 @@ export interface MonacoApi {
     registerCompletionItemProvider(
       languageSelector: string,
       provider: {
+        triggerCharacters?: string[];
         provideCompletionItems(
           model: MonacoModelLike,
           position: MonacoPosition,

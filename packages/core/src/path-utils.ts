@@ -34,10 +34,30 @@ export function fromJsonPointer(pointer: string): string[] {
 }
 
 /**
- * Converts a FieldPath to the string[] format expected by legacy internal APIs
- * (resolveFieldMetadata, resolveJsonSchemaNode, SchemaCache).
+ * Converts a FieldPath to the string[] format expected by internal APIs
+ * (resolveJsonSchemaNode, SchemaCache).
  * All segments are stringified — numeric indices become "0", "1", etc.
  */
 export function toInternalPath(path: FieldPath): string[] {
   return path.map(String);
+}
+
+/**
+ * Tests whether a runtime FieldPath matches a schema-level path.
+ * Numeric segments in the runtime path (array indices) are skipped;
+ * string segments must match one-to-one with the schema path.
+ * Both paths must be fully consumed for a match.
+ */
+export function matchesSchemaPath(
+  runtimePath: FieldPath,
+  schemaPath: readonly string[],
+): boolean {
+  let si = 0;
+  for (const seg of runtimePath) {
+    if (typeof seg === "number") continue;
+    if (si >= schemaPath.length) return false;
+    if (seg !== schemaPath[si]) return false;
+    si++;
+  }
+  return si === schemaPath.length;
 }

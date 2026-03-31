@@ -11,8 +11,8 @@ describe("resolveFieldMetadata", () => {
   describe("explicit metadata only", () => {
     const metadata: ResolvedMetadata = {
       fields: {
-        name: { title: "Name", description: "User name" },
-        "address.street": { title: "Street" },
+        "/name": { title: "Name", description: "User name" },
+        "/address/street": { title: "Street" },
       },
     };
 
@@ -21,7 +21,7 @@ describe("resolveFieldMetadata", () => {
       expect(meta).toEqual({ title: "Name", description: "User name" });
     });
 
-    test("resolves nested field with dot-notation key", () => {
+    test("resolves nested field with pointer key", () => {
       const meta = resolveFieldMetadata(metadata, ["address", "street"]);
       expect(meta).toEqual({ title: "Street" });
     });
@@ -47,7 +47,7 @@ describe("resolveFieldMetadata", () => {
   describe("merge: explicit wins over fallback", () => {
     const metadata: ResolvedMetadata = {
       fields: {
-        name: { title: "Custom Title" },
+        "/name": { title: "Custom Title" },
       },
     };
     const js = schema(
