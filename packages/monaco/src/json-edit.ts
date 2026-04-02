@@ -1,9 +1,19 @@
 import type { FieldPath, SchemaDescriptor } from "@zod-monaco/core";
-import { computeJsonDiff, toJsonPointer } from "@zod-monaco/core";
+import {
+  computeJsonDiff,
+  toJsonPointer,
+  isFieldReadOnly,
+  diffPathCoversReadOnlyDescendant,
+} from "@zod-monaco/core";
 import type { FieldDiff } from "@zod-monaco/core";
 import type { MonacoStandaloneEditorLike } from "./monaco-types.js";
 
-// ─── Public types ─────────────────────────────────────────────────────────────
+/** A field that a programmatic edit would modify but is read-only. */
+export interface ReadOnlyViolation {
+  path: FieldPath;
+  /** RFC 6901 JSON Pointer for the field. */
+  pointer: string;
+}
 
 /** A typed validation issue with FieldPath + RFC 6901 pointer. */
 export interface ValidationIssue {
@@ -33,6 +43,8 @@ export interface PreparedEdit {
   validationIssues: ValidationIssue[];
   /** Structural diff between the current editor content and `newValue`. */
   diff: FieldDiff[];
+  /** Read-only violations — fields that would be modified but are locked. */
+  readOnlyViolations: ReadOnlyViolation[];
   /**
    * True when the editor content has changed since `prepareJsonEdit` was called.
    * A stale prepared edit must NOT be committed — call `prepareJsonEdit` again.
@@ -46,8 +58,6 @@ export interface PreparedEdit {
    */
   commit(options?: { force?: boolean }): void;
 }
-
-// ─── Implementation ───────────────────────────────────────────────────────────
 
 /**
  * Prepares a JSON edit without touching the editor.
@@ -63,10 +73,8 @@ export function prepareJsonEdit(
   descriptor: SchemaDescriptor,
   newValue: unknown,
 ): PreparedEdit {
-  // 1. Serialize proposed value
   const newText = JSON.stringify(newValue, null, 2);
 
-  // 2. Validate
   const zodResult = descriptor.validate(newValue);
   const valid = zodResult.success;
   const validationIssues: ValidationIssue[] = [];
@@ -83,7 +91,6 @@ export function prepareJsonEdit(
     }
   }
 
-  // 3. Parse current editor content for diff
   const oldText = editor.getValue();
   let oldValue: unknown;
   try {
@@ -92,19 +99,31 @@ export function prepareJsonEdit(
     oldValue = undefined;
   }
 
-  // 4. Compute diff
   const diff = computeJsonDiff(oldValue, newValue);
 
-  // 5. Capture version ID snapshot for stale detection
+  const readOnlyViolations: ReadOnlyViolation[] = [];
+  for (const d of diff) {
+    if (
+      isFieldReadOnly(descriptor.metadata, d.path) ||
+      (descriptor.metadata.readOnlyPaths &&
+        diffPathCoversReadOnlyDescendant(
+          d.path,
+          descriptor.metadata.readOnlyPaths,
+        ))
+    ) {
+      readOnlyViolations.push({ path: d.path, pointer: toJsonPointer(d.path) });
+    }
+  }
+
   const model = editor.getModel();
   const snapshotVersion = model?.getVersionId() ?? -1;
 
-  // 6. Build PreparedEdit
   return {
     newText,
     valid,
     validationIssues,
     diff,
+    readOnlyViolations,
 
     get stale(): boolean {
       const currentVersion = editor.getModel()?.getVersionId() ?? -1;
@@ -112,6 +131,12 @@ export function prepareJsonEdit(
     },
 
     commit(options?: { force?: boolean }): void {
+      if (readOnlyViolations.length > 0) {
+        throw new Error(
+          `Cannot commit: ${readOnlyViolations.length} read-only field(s) would be modified.`,
+        );
+      }
+
       if (!valid && !options?.force) {
         throw new Error(
           "Cannot commit an invalid edit. Use { force: true } to override.",

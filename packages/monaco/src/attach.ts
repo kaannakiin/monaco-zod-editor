@@ -1,10 +1,21 @@
-import type { SchemaDescriptor, SuggestionRefinement, ZodIssue } from "@zod-monaco/core";
-import { SchemaCache } from "@zod-monaco/core";
+import type {
+  SchemaDescriptor,
+  SuggestionRefinement,
+  ZodIssue,
+  FieldPath,
+} from "@zod-monaco/core";
+import {
+  SchemaCache,
+  isFieldReadOnly,
+  diffPathCoversReadOnlyDescendant,
+} from "@zod-monaco/core";
 import type { FeatureToggles, ValidationResult } from "./types.js";
 import type { ZodMonacoLocale } from "./locale.js";
 import type {
   MonacoApi,
   MonacoDisposable,
+  MonacoEditorChangeEvent,
+  MonacoJsonDiagnosticsOptions,
   MonacoMarkerData,
   MonacoStandaloneEditorLike,
 } from "./monaco-types.js";
@@ -13,6 +24,7 @@ import {
   resolveJsonPath,
   positionToOffset,
   resolvePathAtOffset,
+  collectPathsInRange,
   LineIndex,
 } from "./json-path-position.js";
 import { createZodHoverProvider } from "./hover.js";
@@ -33,6 +45,9 @@ export interface AttachZodOptions {
   locale?: ZodMonacoLocale;
   validationDelay?: number;
   refinements?: readonly SuggestionRefinement[];
+  onReadOnlyViolation?: (path: FieldPath) => void;
+  /** Base Monaco JSON diagnostics options merged under registry-managed fields (validate, schemas, enableSchemaRequest). */
+  diagnosticsOptions?: MonacoJsonDiagnosticsOptions;
 }
 
 export interface ZodEditorAttachment extends MonacoDisposable {
@@ -82,6 +97,10 @@ export function attachZodToEditor(
   const cursorPathListeners = new Set<
     (segments: BreadcrumbSegment[]) => void
   >();
+
+  if (options.diagnosticsOptions) {
+    getSchemaRegistry(monaco).setBaseOptions(options.diagnosticsOptions);
+  }
 
   function applyJsonSchema(): void {
     if (!descriptor || !features.validation) {
@@ -190,18 +209,12 @@ export function attachZodToEditor(
       parsed = JSON.parse(text);
     } catch (e) {
       const message = e instanceof SyntaxError ? e.message : "Invalid JSON";
-      monaco.editor.setModelMarkers(model, MARKER_OWNER, [
-        {
-          severity: monaco.MarkerSeverity.Error,
-          message,
-          startLineNumber: 1,
-          startColumn: 1,
-          endLineNumber: 1,
-          endColumn: 2,
-          source: MARKER_OWNER,
-        },
-      ]);
-      const vResult: ValidationResult = { valid: false, issues: [], parseError: message };
+      monaco.editor.setModelMarkers(model, MARKER_OWNER, []);
+      const vResult: ValidationResult = {
+        valid: false,
+        issues: [],
+        parseError: message,
+      };
       for (const l of validationListeners) l(vResult);
       return;
     }
@@ -275,8 +288,100 @@ export function attachZodToEditor(
     }
   });
 
-  const changeDisposable = editor.onDidChangeModelContent(() => {
+  let previousText: string = editor.getValue();
+  let isUndoingReadOnly = false;
+
+  function revertToText(text: string): void {
+    if (typeof editor.trigger === "function") {
+      editor.trigger("readOnlyGuard", "undo", null);
+      return;
+    }
+    const model = editor.getModel();
+    if (!model) return;
+    editor.executeEdits("readOnly-revert", [
+      { range: model.getFullModelRange(), text, forceMoveMarkers: false },
+    ]);
+  }
+
+  function guardReadOnlyEdit(event: MonacoEditorChangeEvent): void {
+    if (isUndoingReadOnly) {
+      isUndoingReadOnly = false;
+      previousText = editor.getValue();
+      return;
+    }
+
+    if (!descriptor) {
+      previousText = editor.getValue();
+      return;
+    }
+
+    const meta = descriptor.metadata;
+    if (
+      !meta.readOnly &&
+      (!meta.readOnlyPaths || meta.readOnlyPaths.size === 0)
+    ) {
+      previousText = editor.getValue();
+      return;
+    }
+
+    if (meta.readOnly) {
+      isUndoingReadOnly = true;
+      options.onReadOnlyViolation?.([] as unknown as FieldPath);
+      revertToText(previousText);
+      return;
+    }
+
+    const changes = event.changes as
+      | ReadonlyArray<{ rangeOffset: number; rangeLength: number }>
+      | undefined;
+    if (!changes?.length) {
+      previousText = editor.getValue();
+      return;
+    }
+
+    let touchesReadOnly = false;
+    let violatingPath: FieldPath = [];
+
+    outer: for (const change of changes) {
+      const paths =
+        change.rangeLength === 0
+          ? (() => {
+              const r = resolvePathAtOffset(previousText, change.rangeOffset);
+              return r ? [r.path] : [];
+            })()
+          : collectPathsInRange(
+              previousText,
+              change.rangeOffset,
+              change.rangeLength,
+            );
+
+      for (const fieldPath of paths) {
+
+        if (
+          isFieldReadOnly(meta, fieldPath) ||
+          (meta.readOnlyPaths &&
+            diffPathCoversReadOnlyDescendant(fieldPath, meta.readOnlyPaths))
+        ) {
+          touchesReadOnly = true;
+          violatingPath = fieldPath;
+          break outer;
+        }
+      }
+    }
+
+    if (touchesReadOnly) {
+      isUndoingReadOnly = true;
+      options.onReadOnlyViolation?.(violatingPath);
+      revertToText(previousText);
+      return;
+    }
+
+    previousText = editor.getValue();
+  }
+
+  const changeDisposable = editor.onDidChangeModelContent((event) => {
     lineIndex = null;
+    guardReadOnlyEdit(event);
     scheduleValidation();
   });
 
@@ -289,6 +394,7 @@ export function attachZodToEditor(
     setDescriptor(newDescriptor: SchemaDescriptor | null): void {
       descriptor = newDescriptor;
       schemaCache = descriptor ? new SchemaCache(descriptor.jsonSchema) : null;
+      previousText = editor.getValue();
       applyJsonSchema();
       registerHoverProvider();
       registerCompletionProvider();

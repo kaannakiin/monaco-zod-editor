@@ -196,7 +196,7 @@ describe("hover audit", () => {
         );
         const result = resolvePathAtOffset(text, offset);
 
-        expect(result?.path).toEqual(toStringPath(auditCase.hover.path));
+        expect(result?.path).toEqual(auditCase.hover.path);
       });
     }
 
@@ -213,7 +213,7 @@ describe("hover audit", () => {
       );
 
       const result = resolvePathAtOffset(text, keyOffset);
-      expect(result?.path).toEqual(toStringPath(auditCase.hover.path));
+      expect(result?.path).toEqual(auditCase.hover.path);
     });
   });
 

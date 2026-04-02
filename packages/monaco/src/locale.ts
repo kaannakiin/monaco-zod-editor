@@ -5,6 +5,7 @@ export interface ZodMonacoLocale {
   placeholder: string;
   enumValues: string;
   defaultValue: string;
+  readOnly: string;
 }
 
 export const locales = {
@@ -15,6 +16,7 @@ export const locales = {
     placeholder: "Placeholder",
     enumValues: "Enum values",
     defaultValue: "Default",
+    readOnly: "Read-only",
   },
   tr: {
     required: "Zorunlu",
@@ -23,6 +25,7 @@ export const locales = {
     placeholder: "Yer tutucu",
     enumValues: "Enum değerleri",
     defaultValue: "Varsayılan",
+    readOnly: "Salt okunur",
   },
 } satisfies Record<string, ZodMonacoLocale>;
 

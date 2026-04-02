@@ -1,9 +1,10 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { prepareJsonEdit } from "../json-edit.js";
 import { treeNodeDescriptor } from "@zod-monaco/core";
+import type { SchemaDescriptor } from "@zod-monaco/core";
 import type { MonacoStandaloneEditorLike, MonacoRange, MonacoModelLike } from "../monaco-types.js";
 
-// ─── Mock editor helpers ─────────────────────────────────────────────────────
+
 
 function makeModel(
   text: string,
@@ -76,7 +77,7 @@ const validValue = {
   children: [],
 };
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+
 
 describe("prepareJsonEdit", () => {
   describe("valid value", () => {
@@ -167,7 +168,7 @@ describe("prepareJsonEdit", () => {
     test("stale becomes true when model version changes", () => {
       const editor = makeEditor("{}");
       const prepared = prepareJsonEdit(editor, descriptor, validValue);
-      // Simulate editor content change
+      
       editor.model._bump();
       expect(prepared.stale).toBe(true);
     });
@@ -185,7 +186,7 @@ describe("prepareJsonEdit", () => {
     test("unparseable old content treated as undefined — full add diff", () => {
       const editor = makeEditor("INVALID JSON");
       const prepared = prepareJsonEdit(editor, descriptor, { key: "val" });
-      // Can't parse old → treated as undefined → changed at root
+      
       expect(prepared.diff.length).toBeGreaterThan(0);
     });
   });
@@ -206,5 +207,60 @@ describe("prepareJsonEdit", () => {
         expect(issue.pointer).toContain("createdAt");
       }
     });
+  });
+});
+
+
+
+function makeReadOnlyDescriptor(readOnlyPaths: string[]): SchemaDescriptor {
+  return {
+    ...treeNodeDescriptor,
+    metadata: {
+      ...treeNodeDescriptor.metadata,
+      readOnlyPaths: new Set(readOnlyPaths),
+    },
+  };
+}
+
+describe("prepareJsonEdit — read-only violations", () => {
+  test("commit() throws on readOnly violation even with force: true", () => {
+    const lockedDescriptor = makeReadOnlyDescriptor(["/label"]);
+    const oldValue = { ...validValue, label: "old" };
+    const editor = makeEditor(JSON.stringify(oldValue));
+    const prepared = prepareJsonEdit(editor, lockedDescriptor, {
+      ...validValue,
+      label: "new",
+    });
+    expect(prepared.readOnlyViolations).toHaveLength(1);
+    expect(prepared.readOnlyViolations[0]!.pointer).toBe("/label");
+    
+    expect(() => prepared.commit({ force: true })).toThrow(/read-only/i);
+    expect(editor.executeEdits).not.toHaveBeenCalled();
+  });
+
+  test("readOnlyViolations populated when locked field changed (same type)", () => {
+    const lockedDescriptor = makeReadOnlyDescriptor(["/metadata/createdAt"]);
+    const oldValue = { ...validValue };
+    const editor = makeEditor(JSON.stringify(oldValue));
+    const prepared = prepareJsonEdit(editor, lockedDescriptor, {
+      ...validValue,
+      metadata: { ...validValue.metadata, createdAt: "2099-01-01T00:00:00Z" },
+    });
+    expect(prepared.readOnlyViolations.length).toBeGreaterThan(0);
+    expect(prepared.readOnlyViolations.some((v) => v.pointer === "/metadata/createdAt")).toBe(true);
+  });
+
+  test("type mismatch: replacing object with primitive triggers violation for locked descendant", () => {
+    
+    
+    
+    const lockedDescriptor = makeReadOnlyDescriptor(["/metadata/createdAt"]);
+    const oldValue = { ...validValue }; 
+    const editor = makeEditor(JSON.stringify(oldValue));
+    const prepared = prepareJsonEdit(editor, lockedDescriptor, {
+      ...validValue,
+      metadata: "overwritten" as unknown as typeof validValue.metadata,
+    });
+    expect(prepared.readOnlyViolations.length).toBeGreaterThan(0);
   });
 });

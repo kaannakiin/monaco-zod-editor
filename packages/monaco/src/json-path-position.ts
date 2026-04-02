@@ -88,7 +88,7 @@ export function resolveJsonPath(
 function skipWhitespace(text: string, pos: number): number {
   while (pos < text.length) {
     const ch = text.charCodeAt(pos);
-    // space=32, tab=9, newline=10, carriage-return=13
+
     if (ch !== 32 && ch !== 9 && ch !== 10 && ch !== 13) break;
     pos++;
   }
@@ -122,7 +122,6 @@ function findObjectKey(text: string, start: number, key: string): number {
 
     if (text[pos] !== '"') return -1;
 
-    // const keyStart = pos;
     const parsedKey = parseStringLiteral(text, pos);
     if (parsedKey === null) return -1;
     pos = parsedKey.end;
@@ -189,8 +188,17 @@ function skipValue(text: string, pos: number): number {
 
   while (pos < text.length) {
     const c = text.charCodeAt(pos);
-    // comma=44, ]=93, }=125, space=32, tab=9, newline=10, cr=13
-    if (c === 44 || c === 93 || c === 125 || c === 32 || c === 9 || c === 10 || c === 13) break;
+
+    if (
+      c === 44 ||
+      c === 93 ||
+      c === 125 ||
+      c === 32 ||
+      c === 9 ||
+      c === 10 ||
+      c === 13
+    )
+      break;
     pos++;
   }
   return pos;
@@ -331,8 +339,11 @@ export function positionToOffset(
   return text.length;
 }
 
+/** Path segment: string for object keys, number for array indices */
+export type PathSegment = string | number;
+
 export interface ValueContext {
-  path: string[];
+  path: PathSegment[];
   keyRange: JsonPosition;
   /** Offset range of the complete value (including quotes for strings) */
   valueStart: number;
@@ -348,8 +359,143 @@ export interface ValueContext {
 export function resolvePathAtOffset(
   text: string,
   offset: number,
-): { path: string[]; keyRange: JsonPosition } | null {
+): { path: PathSegment[]; keyRange: JsonPosition } | null {
   return resolvePathInValue(text, 0, offset, []);
+}
+
+function collectInValue(
+  text: string,
+  pos: number,
+  rangeStart: number,
+  rangeEnd: number,
+  path: PathSegment[],
+  results: PathSegment[][],
+): void {
+  pos = skipWhitespace(text, pos);
+  if (pos >= text.length) return;
+  const ch = text[pos];
+  if (ch === "{") {
+    collectInObject(text, pos, rangeStart, rangeEnd, path, results);
+  } else if (ch === "[") {
+    collectInArray(text, pos, rangeStart, rangeEnd, path, results);
+  }
+}
+
+function collectInObject(
+  text: string,
+  pos: number,
+  rangeStart: number,
+  rangeEnd: number,
+  path: PathSegment[],
+  results: PathSegment[][],
+): void {
+  if (text[pos] !== "{") return;
+  pos++;
+
+  while (pos < text.length) {
+    pos = skipWhitespace(text, pos);
+
+    if (text[pos] === "}" || text[pos] === undefined) break;
+    if (text[pos] !== '"') break;
+
+    const keyStart = pos;
+    const parsedKey = parseStringLiteral(text, pos);
+    if (parsedKey === null) break;
+    pos = parsedKey.end;
+
+    pos = skipWhitespace(text, pos);
+    if (text[pos] !== ":") break;
+    pos++;
+    pos = skipWhitespace(text, pos);
+
+    const valueStart = pos;
+    const valueEnd = skipValue(text, pos);
+
+    if (keyStart < rangeEnd && valueEnd > rangeStart) {
+      const fieldPath = [...path, parsedKey.value];
+      results.push(fieldPath);
+
+      const vPos = skipWhitespace(text, valueStart);
+      if (text[vPos] === "{" || text[vPos] === "[") {
+        collectInValue(
+          text,
+          valueStart,
+          rangeStart,
+          rangeEnd,
+          fieldPath,
+          results,
+        );
+      }
+    }
+
+    pos = valueEnd;
+    pos = skipWhitespace(text, pos);
+    if (text[pos] === ",") pos++;
+  }
+}
+
+function collectInArray(
+  text: string,
+  pos: number,
+  rangeStart: number,
+  rangeEnd: number,
+  path: PathSegment[],
+  results: PathSegment[][],
+): void {
+  if (text[pos] !== "[") return;
+  pos++;
+  let index = 0;
+
+  while (pos < text.length) {
+    pos = skipWhitespace(text, pos);
+
+    if (text[pos] === "]" || text[pos] === undefined) break;
+
+    const valueStart = pos;
+    const valueEnd = skipValue(text, pos);
+
+    if (valueStart < rangeEnd && valueEnd > rangeStart) {
+      const itemPath = [...path, index];
+      results.push(itemPath);
+      const vPos = skipWhitespace(text, valueStart);
+      if (text[vPos] === "{" || text[vPos] === "[") {
+        collectInValue(
+          text,
+          valueStart,
+          rangeStart,
+          rangeEnd,
+          itemPath,
+          results,
+        );
+      }
+    }
+
+    pos = valueEnd;
+    pos = skipWhitespace(text, pos);
+    if (text[pos] === ",") pos++;
+    index++;
+  }
+}
+
+/**
+ * Collects all JSON field paths whose byte range overlaps [rangeOffset, rangeOffset + rangeLength).
+ *
+ * Use for multi-byte change ranges to find every field touched by the edit.
+ * For zero-length ranges (pure insertions) use resolvePathAtOffset instead.
+ */
+export function collectPathsInRange(
+  text: string,
+  rangeOffset: number,
+  rangeLength: number,
+): PathSegment[][] {
+  if (rangeLength <= 0) return [];
+  const rangeEnd = rangeOffset + rangeLength;
+  const results: PathSegment[][] = [];
+  const pos = skipWhitespace(text, 0);
+  if (pos < text.length && (text[pos] === "{" || text[pos] === "[")) {
+    collectInValue(text, pos, rangeOffset, rangeEnd, [], results);
+  }
+  return results;
 }
 
 export function getValueContext(
@@ -363,7 +509,7 @@ function getValueContextInValue(
   text: string,
   pos: number,
   target: number,
-  path: string[],
+  path: PathSegment[],
 ): ValueContext | null {
   pos = skipWhitespace(text, pos);
   const ch = text[pos];
@@ -383,7 +529,7 @@ function getValueContextInObject(
   text: string,
   pos: number,
   target: number,
-  path: string[],
+  path: PathSegment[],
 ): ValueContext | null {
   if (text[pos] !== "{") return null;
   pos++;
@@ -443,7 +589,7 @@ function getValueContextInArray(
   text: string,
   pos: number,
   target: number,
-  path: string[],
+  path: PathSegment[],
 ): ValueContext | null {
   if (text[pos] !== "[") return null;
   pos++;
@@ -459,7 +605,7 @@ function getValueContextInArray(
     const valueEnd = skipValue(text, pos);
 
     if (target >= valueStart && target <= valueEnd) {
-      const childPath = [...path, String(index)];
+      const childPath = [...path, index];
       const nested = getValueContextInValue(
         text,
         valueStart,
@@ -493,8 +639,8 @@ function resolvePathInValue(
   text: string,
   pos: number,
   target: number,
-  path: string[],
-): { path: string[]; keyRange: JsonPosition } | null {
+  path: PathSegment[],
+): { path: PathSegment[]; keyRange: JsonPosition } | null {
   pos = skipWhitespace(text, pos);
   const ch = text[pos];
 
@@ -513,15 +659,21 @@ function resolvePathInObject(
   text: string,
   pos: number,
   target: number,
-  path: string[],
-): { path: string[]; keyRange: JsonPosition } | null {
+  path: PathSegment[],
+): { path: PathSegment[]; keyRange: JsonPosition } | null {
   if (text[pos] !== "{") return null;
+  const objectStart = pos;
   pos++;
+
+  let lastResult: { path: PathSegment[]; keyRange: JsonPosition } | null = null;
 
   while (pos < text.length) {
     pos = skipWhitespace(text, pos);
 
-    if (text[pos] === "}") return null;
+    if (text[pos] === "}") {
+      if (target > objectStart && target < pos && lastResult) return lastResult;
+      return null;
+    }
 
     if (text[pos] !== '"') return null;
 
@@ -538,6 +690,8 @@ function resolvePathInObject(
 
     const valueStart = pos;
     const valueEnd = skipValue(text, pos);
+
+    if (target < keyStart && lastResult) return lastResult;
 
     if (target >= keyStart && target < keyEnd) {
       return {
@@ -559,6 +713,11 @@ function resolvePathInObject(
       };
     }
 
+    lastResult = {
+      path: [...path, parsedKey.value],
+      keyRange: makePosition(text, keyStart, keyEnd),
+    };
+
     pos = valueEnd;
     pos = skipWhitespace(text, pos);
     if (text[pos] === ",") pos++;
@@ -571,8 +730,8 @@ function resolvePathInArray(
   text: string,
   pos: number,
   target: number,
-  path: string[],
-): { path: string[]; keyRange: JsonPosition } | null {
+  path: PathSegment[],
+): { path: PathSegment[]; keyRange: JsonPosition } | null {
   if (text[pos] !== "[") return null;
   pos++;
 
@@ -589,12 +748,12 @@ function resolvePathInArray(
     if (target >= valueStart && target <= valueEnd) {
       const nested = resolvePathInValue(text, valueStart, target, [
         ...path,
-        String(index),
+        index,
       ]);
       if (nested) return nested;
 
       return {
-        path: [...path, String(index)],
+        path: [...path, index],
         keyRange: makePosition(text, valueStart, valueEnd),
       };
     }

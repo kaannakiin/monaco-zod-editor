@@ -36,6 +36,8 @@ export interface FieldCatalogEntry {
   enumLabels?: Record<string, string>;
   typeInfo: FieldTypeInfo;
   required: boolean;
+  /** True when this field or an ancestor is read-only. */
+  readOnly?: boolean;
   /** True when this entry was cut by the recursion unroll limit. */
   recursive?: boolean;
   /** Current value at this path, when `currentValue` was supplied. */
@@ -216,6 +218,7 @@ function walkNode(
         if (ctx2.metadata.enumLabels)
           entry.enumLabels = ctx2.metadata.enumLabels;
       }
+      if (ctx2.readOnly) entry.readOnly = true;
       return entry;
     }
     ctx.refCounts.set(refKey, (ctx.refCounts.get(refKey) ?? 0) + 1);
@@ -264,6 +267,7 @@ function buildEntry(
     if (meta.examples) entry.examples = meta.examples;
     if (meta.enumLabels) entry.enumLabels = meta.enumLabels;
   }
+  if (fieldCtx.readOnly) entry.readOnly = true;
 
   const cv = getValueAtPath(ctx.currentValue, path);
   if (cv !== undefined) entry.currentValue = cv;

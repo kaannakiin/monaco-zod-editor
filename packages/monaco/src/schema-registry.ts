@@ -1,4 +1,4 @@
-import type { MonacoApi, MonacoDisposable } from "./monaco-types.js";
+import type { MonacoApi, MonacoDisposable, MonacoJsonDiagnosticsOptions } from "./monaco-types.js";
 
 export interface SchemaEntry {
   uri: string;
@@ -13,14 +13,22 @@ export interface SchemaRegistration extends MonacoDisposable {
 
 export interface ZodSchemaRegistry extends MonacoDisposable {
   register(entry: SchemaEntry): SchemaRegistration;
+  /** Set base diagnostics options that will be merged under registry-managed fields on every flush. */
+  setBaseOptions(options: MonacoJsonDiagnosticsOptions): void;
 }
 
 class DefaultSchemaRegistry implements ZodSchemaRegistry {
   readonly #monaco: MonacoApi;
   readonly #entries = new Map<string, SchemaEntry>();
+  #baseOptions: MonacoJsonDiagnosticsOptions = {};
 
   constructor(monaco: MonacoApi) {
     this.#monaco = monaco;
+  }
+
+  setBaseOptions(options: MonacoJsonDiagnosticsOptions): void {
+    this.#baseOptions = options;
+    this.#flush();
   }
 
   register(entry: SchemaEntry): SchemaRegistration {
@@ -57,6 +65,7 @@ class DefaultSchemaRegistry implements ZodSchemaRegistry {
   #flush(): void {
     if (this.#entries.size === 0) {
       this.#monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+        ...this.#baseOptions,
         validate: false,
         schemas: [],
       });
@@ -64,6 +73,7 @@ class DefaultSchemaRegistry implements ZodSchemaRegistry {
     }
 
     this.#monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+      ...this.#baseOptions,
       validate: true,
       enableSchemaRequest: false,
       schemas: [...this.#entries.values()],

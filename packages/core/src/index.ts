@@ -16,6 +16,7 @@ export type {
   SuggestionRefinement,
 } from "./types.js";
 export { applyEnumRefinements } from "./apply-refinements.js";
+export { isFieldReadOnly, diffPathCoversReadOnlyDescendant } from "./read-only.js";
 
 export { resolveFieldContext } from "./resolve-field-context.js";
 export type {

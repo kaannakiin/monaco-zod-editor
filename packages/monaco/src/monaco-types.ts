@@ -60,6 +60,7 @@ export interface MonacoStandaloneEditorLike extends MonacoDisposable {
       forceMoveMarkers?: boolean;
     }>,
   ): boolean;
+  trigger?(source: string, handlerId: string, payload: unknown): void;
 }
 
 export interface MonacoMarkerData {
@@ -103,6 +104,11 @@ export interface MonacoJsonDiagnosticsOptions {
     schema: Record<string, unknown>;
   }>;
   enableSchemaRequest?: boolean;
+  allowComments?: boolean;
+  trailingCommas?: "error" | "warning" | "ignore";
+  comments?: "error" | "warning" | "ignore";
+  schemaValidation?: "error" | "warning" | "ignore";
+  schemaRequest?: "error" | "warning" | "ignore";
 }
 
 export interface MonacoEditorApi {

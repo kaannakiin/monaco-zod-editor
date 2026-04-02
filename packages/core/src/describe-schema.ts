@@ -9,6 +9,7 @@ import type {
 import { ToJSONSchemaParams } from "zod/v4/core";
 import { entriesToPointerMap } from "./flatten-fields.js";
 import { applyEnumRefinements, validateEnumRefinements } from "./apply-refinements.js";
+import { toJsonPointer } from "./path-utils.js";
 
 function resolveMetadata(
   input?: SchemaMetadata<unknown>,
@@ -20,7 +21,21 @@ function resolveMetadata(
   const { fields, ...rest } = input;
   const flatFields = fields ? entriesToPointerMap(fields) : {};
 
-  return { ...rest, fields: flatFields as Partial<Record<string, FieldMetadata>> };
+  const readOnlyPaths = new Set<string>();
+  if (fields) {
+    for (const entry of fields) {
+      if (entry.readOnly) {
+        const pointer = toJsonPointer(entry.path as readonly string[]);
+        if (pointer !== "") readOnlyPaths.add(pointer);
+      }
+    }
+  }
+
+  return {
+    ...rest,
+    fields: flatFields as Partial<Record<string, FieldMetadata>>,
+    ...(readOnlyPaths.size > 0 ? { readOnlyPaths } : {}),
+  };
 }
 
 export function describeSchema<T>(

@@ -56,6 +56,7 @@ export interface MockEditor extends MonacoStandaloneEditorLike {
   setValue(value: string): void;
   emitCursor(position: MonacoPosition): void;
   emitBlur(): void;
+  emitChange(event: MonacoEditorChangeEvent): void;
 }
 
 export interface MockMonaco extends MonacoApi {
@@ -186,6 +187,11 @@ export function createMockEditor(
     emitBlur() {
       for (const listener of blurListeners) {
         listener();
+      }
+    },
+    emitChange(event: MonacoEditorChangeEvent) {
+      for (const listener of changeListeners) {
+        listener(event);
       }
     },
   };

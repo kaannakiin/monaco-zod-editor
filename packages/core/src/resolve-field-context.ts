@@ -1,11 +1,7 @@
 import type { SchemaDescriptor } from "./types.js";
 import type { SchemaCache } from "./schema-cache.js";
-import {
-  resolveFieldMetadata,
-} from "./resolve-field-metadata.js";
-import {
-  resolveJsonSchemaNode,
-} from "./resolve-json-schema-metadata.js";
+import { resolveFieldMetadata } from "./resolve-field-metadata.js";
+import { resolveJsonSchemaNode } from "./resolve-json-schema-metadata.js";
 import type {
   FieldPath,
   FieldContext,
@@ -13,6 +9,7 @@ import type {
   UnionBranchSummary,
 } from "./field-context-types.js";
 import { toInternalPath } from "./path-utils.js";
+import { isFieldReadOnly } from "./read-only.js";
 
 /**
  * Resolves a $ref pointer without unwrapping anyOf/oneOf.
@@ -48,7 +45,7 @@ function resolveRawSchemaNode(
   if (path.length === 0) {
     return resolveRefOnly(jsonSchema, jsonSchema);
   }
-  // Navigate to parent via the existing traversal (which DOES unwrap unions for navigation)
+
   const parentPath = path.slice(0, -1);
   const lastSegment = path[path.length - 1]!;
   const parentNodeRaw = resolveJsonSchemaNode(
@@ -57,17 +54,14 @@ function resolveRawSchemaNode(
   ) as JsonSchemaNode | null;
   if (!parentNodeRaw) return null;
 
-  // Merge allOf branches so properties/required from all branches are visible
   const parentNode = mergeAllOfBranches(parentNodeRaw, jsonSchema);
 
-  // Now get the raw child WITHOUT union unwrapping
   const properties = parentNode.properties as JsonSchemaNode | undefined;
   if (properties && lastSegment in properties) {
     const child = (properties as JsonSchemaNode)[lastSegment] as JsonSchemaNode;
     return resolveRefOnly(child, jsonSchema);
   }
 
-  // Array items (numeric segment)
   if (/^\d+$/.test(lastSegment)) {
     const prefixItems = parentNode.prefixItems as JsonSchemaNode[] | undefined;
     if (Array.isArray(prefixItems)) {
@@ -80,8 +74,9 @@ function resolveRawSchemaNode(
     if (items) return resolveRefOnly(items, jsonSchema);
   }
 
-  // additionalProperties fallback
-  const additionalProperties = parentNode.additionalProperties as JsonSchemaNode | undefined;
+  const additionalProperties = parentNode.additionalProperties as
+    | JsonSchemaNode
+    | undefined;
   if (additionalProperties && typeof additionalProperties === "object") {
     return resolveRefOnly(additionalProperties, jsonSchema);
   }
@@ -107,10 +102,18 @@ function mergeAllOfBranches(
     const b = resolveRefOnly(branch, root);
     if (!b) continue;
     if (b.properties && typeof b.properties === "object") {
-      merged.properties = { ...(merged.properties as object ?? {}), ...(b.properties as object) };
+      merged.properties = {
+        ...((merged.properties as object) ?? {}),
+        ...(b.properties as object),
+      };
     }
     if (Array.isArray(b.required)) {
-      merged.required = [...(Array.isArray(merged.required) ? merged.required as unknown[] : []), ...(b.required as unknown[])];
+      merged.required = [
+        ...(Array.isArray(merged.required)
+          ? (merged.required as unknown[])
+          : []),
+        ...(b.required as unknown[]),
+      ];
     }
   }
   return merged;
@@ -130,7 +133,6 @@ function extractTypeInfo(node: JsonSchemaNode | null): FieldTypeInfo {
     nullable: false,
   };
 
-  // Detect union (anyOf/oneOf) and nullable
   const branches = (node.anyOf ?? node.oneOf) as JsonSchemaNode[] | undefined;
   if (Array.isArray(branches)) {
     const nonNullBranches = branches.filter((b) => b.type !== "null");
@@ -138,13 +140,11 @@ function extractTypeInfo(node: JsonSchemaNode | null): FieldTypeInfo {
     info.nullable = hasNullBranch;
 
     if (nonNullBranches.length === 1) {
-      // Simple nullable — treat as the wrapped type
       const inner = nonNullBranches[0] as JsonSchemaNode;
       const innerInfo = extractTypeInfo(inner);
       return { ...innerInfo, nullable: true };
     }
 
-    // True union — enumerate branches
     info.type = "union";
     info.unionBranches = nonNullBranches.map((b): UnionBranchSummary => {
       const bNode = b as JsonSchemaNode;
@@ -157,7 +157,6 @@ function extractTypeInfo(node: JsonSchemaNode | null): FieldTypeInfo {
     return info;
   }
 
-  // Standard type
   const rawType = node.type;
   if (typeof rawType === "string") {
     info.type = rawType;
@@ -167,32 +166,29 @@ function extractTypeInfo(node: JsonSchemaNode | null): FieldTypeInfo {
     info.type = nonNull.length === 1 ? nonNull[0] : nonNull;
   }
 
-  // Scalar constraints
   if (typeof node.format === "string") info.format = node.format;
   if (node.enum !== undefined) info.enum = node.enum as unknown[];
   if (typeof node.pattern === "string") info.pattern = node.pattern;
   if (node.const !== undefined) info.const = node.const;
 
-  // String
   if (typeof node.minLength === "number") info.minLength = node.minLength;
   if (typeof node.maxLength === "number") info.maxLength = node.maxLength;
 
-  // Number
   if (typeof node.minimum === "number") info.minimum = node.minimum;
   if (typeof node.maximum === "number") info.maximum = node.maximum;
-  if (typeof node.exclusiveMinimum === "number") info.exclusiveMinimum = node.exclusiveMinimum;
-  if (typeof node.exclusiveMaximum === "number") info.exclusiveMaximum = node.exclusiveMaximum;
+  if (typeof node.exclusiveMinimum === "number")
+    info.exclusiveMinimum = node.exclusiveMinimum;
+  if (typeof node.exclusiveMaximum === "number")
+    info.exclusiveMaximum = node.exclusiveMaximum;
   if (typeof node.multipleOf === "number") info.multipleOf = node.multipleOf;
 
-  // Array
   if (typeof node.minItems === "number") info.minItems = node.minItems;
   if (typeof node.maxItems === "number") info.maxItems = node.maxItems;
-  if (typeof node.uniqueItems === "boolean") info.uniqueItems = node.uniqueItems;
+  if (typeof node.uniqueItems === "boolean")
+    info.uniqueItems = node.uniqueItems;
 
-  // Default value
   if (node.default !== undefined) info.default = node.default;
 
-  // Object — list property names
   const props = node.properties as JsonSchemaNode | undefined;
   if (props && typeof props === "object") {
     info.properties = Object.keys(props);
@@ -214,15 +210,12 @@ export function resolveFieldContext(
   path: FieldPath,
   cache?: SchemaCache,
 ): FieldContext {
-  // Bridge: FieldPath → string[] for all legacy internal calls
   const internalPath = toInternalPath(path);
 
-  // schemaNode: unwrapped for navigation (hover/completion child traversal)
   const schemaNode = cache
     ? cache.resolveNode(internalPath)
     : resolveJsonSchemaNode(descriptor.jsonSchema, internalPath);
 
-  // rawNode: $ref resolved but anyOf/oneOf preserved — for accurate typeInfo extraction
   const rawNode = resolveRawSchemaNode(
     descriptor.jsonSchema as JsonSchemaNode,
     internalPath,
@@ -235,7 +228,6 @@ export function resolveFieldContext(
     cache,
   );
 
-  // Resolve required status from parent node's required array
   let required = false;
   const lastSegment = path.at(-1);
   if (typeof lastSegment === "string" && path.length > 0) {
@@ -244,7 +236,10 @@ export function resolveFieldContext(
       ? cache.resolveNode(parentInternalPath)
       : resolveJsonSchemaNode(descriptor.jsonSchema, parentInternalPath);
     const parentNodeMerged = parentNodeRaw2
-      ? mergeAllOfBranches(parentNodeRaw2 as JsonSchemaNode, descriptor.jsonSchema as JsonSchemaNode)
+      ? mergeAllOfBranches(
+          parentNodeRaw2 as JsonSchemaNode,
+          descriptor.jsonSchema as JsonSchemaNode,
+        )
       : null;
     const requiredArray = parentNodeMerged?.required;
     if (Array.isArray(requiredArray)) {
@@ -258,5 +253,6 @@ export function resolveFieldContext(
     schemaNode,
     typeInfo: extractTypeInfo(rawNode),
     required,
+    readOnly: isFieldReadOnly(descriptor.metadata, path),
   };
 }

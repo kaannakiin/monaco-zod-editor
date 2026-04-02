@@ -33,12 +33,17 @@ export function formatFieldMetadataHover(
   required?: boolean,
   locale?: ZodMonacoLocale,
   typeInfo?: FieldTypeInfo,
+  readOnly?: boolean,
 ): string {
   const l = locale ?? defaultLocale;
   const parts: string[] = [];
 
   if (meta.title) {
     parts.push(`**${meta.title}**`);
+  }
+
+  if (readOnly) {
+    parts.push(`**${l.readOnly}**`);
   }
 
   if (required !== undefined) {
@@ -99,7 +104,6 @@ export function createZodHoverProvider(
     const parentNode = parentCtx.schemaNode;
     if (!parentNode) return undefined;
 
-    // Check top-level properties and allOf branch properties
     const hasProperty = (node: Record<string, unknown>, key: string): boolean => {
       const props = node.properties;
       if (props && typeof props === "object" && Object.prototype.hasOwnProperty.call(props, key)) {
@@ -143,20 +147,17 @@ export function createZodHoverProvider(
         return null;
       }
 
-      // Convert string[] path → FieldPath (coerce numeric-looking segments to number)
-      const fieldPath: FieldPath = resolved.path.map((s) =>
-        /^\d+$/.test(s) ? Number(s) : s,
-      );
+      const fieldPath: FieldPath = resolved.path;
       const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
 
-      if (!fieldCtx.metadata) {
+      if (!fieldCtx.metadata && !fieldCtx.readOnly) {
         return null;
       }
 
-      const meta = fieldCtx.metadata;
+      const meta = fieldCtx.metadata ?? {};
       const required = resolveRequiredState(fieldPath, fieldCtx.required);
 
-      const content = formatFieldMetadataHover(meta, required, locale, fieldCtx.typeInfo);
+      const content = formatFieldMetadataHover(meta, required, locale, fieldCtx.typeInfo, fieldCtx.readOnly);
 
       if (!content) {
         return null;

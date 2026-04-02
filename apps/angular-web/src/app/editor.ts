@@ -10,16 +10,22 @@ import {
   signal,
 } from '@angular/core';
 import { treeNodeDescriptor, treeNodeDefaultValue } from '@zod-monaco/core';
+import type { FieldPath } from '@zod-monaco/core';
+
+const descriptorWithReadOnly = {
+  ...treeNodeDescriptor,
+  metadata: {
+    ...treeNodeDescriptor.metadata,
+    readOnlyPaths: new Set(['/metadata/createdAt', '/id']),
+  },
+};
 import {
   loadMonaco,
-  attachZodToEditor,
   createZodEditorController,
   type BreadcrumbSegment,
   type MonacoDisposable,
   type ValidationResult,
   type ZodEditorController,
-  type ZodEditorAttachment,
-  type MonacoStandaloneEditorLike,
 } from '@zod-monaco/monaco';
 import type { ZodIssue } from '@zod-monaco/core';
 
@@ -50,6 +56,11 @@ import type { ZodIssue } from '@zod-monaco/core';
       </nav>
     }
     <div #container class="editor-container"></div>
+    @if (readOnlyToast()) {
+      <div class="readonly-toast" role="alert" aria-live="assertive">
+        🔒 "{{ readOnlyToast() }}" is read-only
+      </div>
+    }
     @if (loaded() && issues().length > 0) {
       <ul class="issue-list" role="list" aria-label="Validation errors">
         @for (issue of issues(); track $index) {
@@ -151,6 +162,20 @@ import type { ZodIssue } from '@zod-monaco/core';
     .issue-message {
       color: rgba(244, 247, 251, 0.7);
     }
+    .readonly-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(239, 68, 68, 0.9);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      pointer-events: none;
+      z-index: 9999;
+    }
   `,
 })
 export class EditorComponent implements OnDestroy {
@@ -159,6 +184,8 @@ export class EditorComponent implements OnDestroy {
   readonly loaded = signal(false);
   readonly issues = signal<ZodIssue[]>([]);
   readonly breadcrumbs = signal<BreadcrumbSegment[]>([]);
+  readonly readOnlyToast = signal<string | null>(null);
+  #toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   #controller: ZodEditorController | null = null;
   #validationSubscription: MonacoDisposable | null = null;
@@ -175,7 +202,7 @@ export class EditorComponent implements OnDestroy {
 
     this.#controller = createZodEditorController({
       monaco,
-      descriptor: treeNodeDescriptor,
+      descriptor: descriptorWithReadOnly,
       value: treeNodeDefaultValue,
       editorOptions: {
         theme: 'vs-dark',
@@ -185,6 +212,7 @@ export class EditorComponent implements OnDestroy {
         scrollBeyondLastLine: false,
         padding: { top: 16 },
       },
+      onReadOnlyViolation: (path: FieldPath) => this.#showReadOnlyToast(path),
     });
 
     this.#controller.mount(this.container().nativeElement);
@@ -204,6 +232,17 @@ export class EditorComponent implements OnDestroy {
     });
   }
 
+  #showReadOnlyToast(path: FieldPath): void {
+    const label = path.length > 0 ? String(path.at(-1)) : 'document';
+    this.readOnlyToast.set(label);
+    this.#cdr.markForCheck();
+    if (this.#toastTimer !== null) clearTimeout(this.#toastTimer);
+    this.#toastTimer = setTimeout(() => {
+      this.readOnlyToast.set(null);
+      this.#cdr.markForCheck();
+    }, 2500);
+  }
+
   revealIssue(issue: ZodIssue): void {
     this.#controller?.revealIssue(issue);
   }
@@ -213,6 +252,7 @@ export class EditorComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.#toastTimer !== null) clearTimeout(this.#toastTimer);
     this.#cursorPathSubscription?.dispose();
     this.#cursorPathSubscription = null;
     this.#validationSubscription?.dispose();

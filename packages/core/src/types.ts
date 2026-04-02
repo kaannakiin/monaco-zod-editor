@@ -7,6 +7,7 @@ export interface FieldMetadata {
   placeholder?: string;
   enumLabels?: Record<string, string>;
   emptyStateHint?: string;
+  readOnly?: boolean;
 }
 
 /**
@@ -57,6 +58,7 @@ export type SuggestionRefinement<T = unknown> = {
 
 export type ResolvedMetadata<K extends string = string> = FieldMetadata & {
   fields: Partial<Record<K, FieldMetadata>>;
+  readOnlyPaths?: ReadonlySet<string>;
 };
 
 export interface SchemaDescriptor<T = unknown> {

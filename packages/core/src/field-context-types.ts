@@ -14,24 +14,24 @@ export interface FieldTypeInfo {
   enum?: unknown[];
   pattern?: string;
   const?: unknown;
-  // String constraints
+
   minLength?: number;
   maxLength?: number;
-  // Number constraints
+
   minimum?: number;
   maximum?: number;
   exclusiveMinimum?: number;
   exclusiveMaximum?: number;
   multipleOf?: number;
-  // Array constraints
+
   minItems?: number;
   maxItems?: number;
   uniqueItems?: boolean;
-  // Default value from JSON Schema
+
   default?: unknown;
-  // Object info
+
   properties?: string[];
-  // Union info — present when the node is oneOf/anyOf
+
   unionBranches?: UnionBranchSummary[];
 }
 
@@ -54,4 +54,5 @@ export interface FieldContext {
   schemaNode: Record<string, unknown> | null;
   typeInfo: FieldTypeInfo;
   required: boolean;
+  readOnly: boolean;
 }

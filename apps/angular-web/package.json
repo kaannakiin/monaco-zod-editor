@@ -3,7 +3,7 @@
   "version": "2.0.3",
   "scripts": {
     "ng": "ng",
-    "dev": "ng serve --port 4201",
+    "dev": "rm -rf .angular/cache && ng serve --port 4201",
     "build": "ng build",
     "lint": "eslint .",
     "check-types": "tsc --noEmit -p tsconfig.app.json",

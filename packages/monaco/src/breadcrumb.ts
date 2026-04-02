@@ -1,3 +1,5 @@
+import type { PathSegment } from "./json-path-position.js";
+
 export interface BreadcrumbSegment {
   /** Display label: "root", "metadata", "children[0]", "email" */
   label: string;
@@ -6,22 +8,22 @@ export interface BreadcrumbSegment {
 }
 
 /**
- * Converts a raw string path from resolvePathAtOffset into displayable
+ * Converts a typed path from resolvePathAtOffset into displayable
  * breadcrumb segments with array indices collapsed into their parent key.
  *
- * Example: ["children", "0", "name"] →
+ * Example: ["children", 0, "name"] →
  *   [{ label: "root", path: [] },
  *    { label: "children[0]", path: ["children", 0] },
  *    { label: "name", path: ["children", 0, "name"] }]
  */
 export function buildBreadcrumbSegments(
-  rawPath: string[],
+  rawPath: PathSegment[],
 ): BreadcrumbSegment[] {
   const segments: BreadcrumbSegment[] = [];
   const currentPath: PropertyKey[] = [];
 
-  if (rawPath.length > 0 && isNumericIndex(rawPath[0]!)) {
-    const idx = Number(rawPath[0]);
+  if (rawPath.length > 0 && typeof rawPath[0] === "number") {
+    const idx = rawPath[0];
     currentPath.push(idx);
     segments.push({ label: `root[${idx}]`, path: [...currentPath] });
 
@@ -33,7 +35,7 @@ export function buildBreadcrumbSegments(
 }
 
 function buildRemaining(
-  rawPath: string[],
+  rawPath: PathSegment[],
   startIndex: number,
   currentPath: PropertyKey[],
   segments: BreadcrumbSegment[],
@@ -44,11 +46,11 @@ function buildRemaining(
     const key = rawPath[i]!;
     currentPath.push(key);
 
-    let label = key;
+    let label = String(key);
 
-    if (i + 1 < rawPath.length && isNumericIndex(rawPath[i + 1]!)) {
+    if (i + 1 < rawPath.length && typeof rawPath[i + 1] === "number") {
       i++;
-      const idx = Number(rawPath[i]!);
+      const idx = rawPath[i]!;
       currentPath.push(idx);
       label = `${key}[${idx}]`;
     }
@@ -58,9 +60,4 @@ function buildRemaining(
   }
 
   return segments;
-}
-
-function isNumericIndex(value: string): boolean {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 && String(Math.floor(n)) === value;
 }

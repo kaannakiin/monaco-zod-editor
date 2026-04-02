@@ -1,5 +1,13 @@
-import type { FieldPath, SchemaDescriptor, SuggestionRefinement } from "@zod-monaco/core";
-import { resolveFieldContext, SchemaCache, matchesSchemaPath } from "@zod-monaco/core";
+import type {
+  FieldPath,
+  SchemaDescriptor,
+  SuggestionRefinement,
+} from "@zod-monaco/core";
+import {
+  resolveFieldContext,
+  SchemaCache,
+  matchesSchemaPath,
+} from "@zod-monaco/core";
 import type {
   MonacoModelLike,
   MonacoPosition,
@@ -81,15 +89,13 @@ export function createZodCompletionProvider(
         return null;
       }
 
-      // Convert string[] path → FieldPath (coerce numeric-looking segments to number)
-      const fieldPath: FieldPath = ctx.path.map((s) =>
-        /^\d+$/.test(s) ? Number(s) : s,
-      );
+      const fieldPath: FieldPath = ctx.path;
       const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
+
+      if (fieldCtx.readOnly) return null;
 
       const items: MonacoCompletionItem[] = [];
 
-      // 1. Enum completions (priority — from JSON Schema)
       const enumValues = fieldCtx.typeInfo.enum;
       if (Array.isArray(enumValues)) {
         const labels = fieldCtx.metadata?.enumLabels;
@@ -117,15 +123,15 @@ export function createZodCompletionProvider(
         }
       }
 
-      // 2. Suggestion refinements (soft — only when no enum items)
       if (items.length === 0 && refinements?.length) {
         for (const ref of refinements) {
-          if (!matchesSchemaPath(fieldPath, ref.path as readonly string[])) continue;
+          if (!matchesSchemaPath(fieldPath, ref.path as readonly string[]))
+            continue;
 
-          // triggerPattern gating: check text content before cursor
           if (ref.triggerPattern && ctx.insideString) {
             const textBeforeCursor = text.slice(ctx.innerStart, offset);
-            if (!new RegExp(ref.triggerPattern).test(textBeforeCursor)) continue;
+            if (!new RegExp(ref.triggerPattern).test(textBeforeCursor))
+              continue;
           }
 
           const range = ctx.insideString
@@ -137,7 +143,9 @@ export function createZodCompletionProvider(
             items.push({
               label: suggestion,
               kind: TEXT_KIND,
-              insertText: ctx.insideString ? suggestion : JSON.stringify(suggestion),
+              insertText: ctx.insideString
+                ? suggestion
+                : JSON.stringify(suggestion),
               sortText: `z${String(i).padStart(4, "0")}`,
               range,
             });

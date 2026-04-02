@@ -15,10 +15,11 @@ import type { ZodEditorAttachment } from "./attach.js";
 export type { FeatureToggles } from "./types.js";
 export type { ZodMonacoLocale } from "./locale.js";
 export { locales, defaultLocale } from "./locale.js";
-export type { JsonPosition, ValueContext } from "./json-path-position.js";
+export type { JsonPosition, ValueContext, PathSegment } from "./json-path-position.js";
 export {
   resolveJsonPath,
   resolvePathAtOffset,
+  collectPathsInRange,
   getValueContext,
   positionToOffset,
   LineIndex,
@@ -59,7 +60,7 @@ export { getSchemaRegistry } from "./schema-registry.js";
 export type { ZodSchemaRegistry, SchemaRegistration, SchemaEntry } from "./schema-registry.js";
 export { createZodHoverProvider } from "./hover.js";
 export { prepareJsonEdit } from "./json-edit.js";
-export type { PreparedEdit, ValidationIssue } from "./json-edit.js";
+export type { PreparedEdit, ValidationIssue, ReadOnlyViolation } from "./json-edit.js";
 
 const DEFAULT_EDITOR_LANGUAGE = "json";
 
@@ -72,6 +73,9 @@ export interface CreateZodEditorControllerOptions {
   editorOptions?: Record<string, unknown>;
   validationDelay?: number;
   refinements?: readonly SuggestionRefinement[];
+  onReadOnlyViolation?: (path: import("@zod-monaco/core").FieldPath) => void;
+  /** Base Monaco JSON diagnostics options merged under registry-managed fields. */
+  diagnosticsOptions?: import("./monaco-types.js").MonacoJsonDiagnosticsOptions;
 }
 
 export interface ZodEditorController extends MonacoDisposable {
@@ -117,6 +121,8 @@ class DefaultZodEditorController implements ZodEditorController {
   readonly #features: FeatureToggles | undefined;
   readonly #locale: ZodMonacoLocale | undefined;
   readonly #validationDelay: number | undefined;
+  readonly #onReadOnlyViolation: ((path: import("@zod-monaco/core").FieldPath) => void) | undefined;
+  readonly #diagnosticsOptions: import("./monaco-types.js").MonacoJsonDiagnosticsOptions | undefined;
 
   #editor: MonacoStandaloneEditorLike | null = null;
   #changeDisposable: MonacoDisposable | null = null;
@@ -136,6 +142,8 @@ class DefaultZodEditorController implements ZodEditorController {
     this.#locale = options.locale;
     this.#validationDelay = options.validationDelay;
     this.#features = options.features;
+    this.#onReadOnlyViolation = options.onReadOnlyViolation;
+    this.#diagnosticsOptions = options.diagnosticsOptions;
   }
 
   mount(element: HTMLElement): MonacoStandaloneEditorLike {
@@ -158,6 +166,8 @@ class DefaultZodEditorController implements ZodEditorController {
       locale: this.#locale,
       validationDelay: this.#validationDelay,
       refinements: this.#refinements,
+      onReadOnlyViolation: this.#onReadOnlyViolation,
+      diagnosticsOptions: this.#diagnosticsOptions,
     });
 
     this.#changeDisposable = this.#editor.onDidChangeModelContent((event) => {
