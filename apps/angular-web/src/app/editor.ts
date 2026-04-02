@@ -212,7 +212,9 @@ export class EditorComponent implements OnDestroy {
         scrollBeyondLastLine: false,
         padding: { top: 16 },
       },
-      onReadOnlyViolation: (path: FieldPath) => this.#showReadOnlyToast(path),
+      onReadOnlyViolation: (detail) => {
+        this.#showReadOnlyToast(detail.path);
+      },
     });
 
     this.#controller.mount(this.container().nativeElement);

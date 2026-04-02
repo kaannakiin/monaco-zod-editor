@@ -35,6 +35,19 @@ export interface ZodCompletionProvider {
 const ENUM_MEMBER_KIND = 17;
 const TEXT_KIND = 1;
 
+function formatConstraintHint(constraints?: import("@zod-monaco/core").FieldConstraints): string | undefined {
+  if (!constraints) return undefined;
+  const parts: string[] = [];
+  if (constraints.minLength !== undefined && constraints.maxLength !== undefined) parts.push(`${constraints.minLength}–${constraints.maxLength} chars`);
+  else if (constraints.minLength !== undefined) parts.push(`min ${constraints.minLength} chars`);
+  else if (constraints.maxLength !== undefined) parts.push(`max ${constraints.maxLength} chars`);
+  if (constraints.minimum !== undefined && constraints.maximum !== undefined) parts.push(`${constraints.minimum}–${constraints.maximum}`);
+  else if (constraints.minimum !== undefined) parts.push(`≥ ${constraints.minimum}`);
+  else if (constraints.maximum !== undefined) parts.push(`≤ ${constraints.maximum}`);
+  if (constraints.pattern) parts.push(`/${constraints.pattern}/`);
+  return parts.length > 0 ? parts.join(", ") : undefined;
+}
+
 /**
  * Extracts single literal characters from simple triggerPattern strings.
  * Only patterns that are a single literal char (possibly backslash-escaped)
@@ -80,17 +93,23 @@ export function createZodCompletionProvider(
     if (fieldCtx.readOnly) return [];
 
     const items: MonacoCompletionItem[] = [];
+    const meta = fieldCtx.metadata;
 
     const enumValues = branchEnums ?? fieldCtx.typeInfo.enum;
     if (Array.isArray(enumValues)) {
-      const labels = fieldCtx.metadata?.enumLabels;
+      const labels = meta?.enumLabels;
+      const constraintHint = formatConstraintHint(meta?.constraints);
       for (let i = 0; i < enumValues.length; i++) {
         const val = enumValues[i];
+        const enumLabel = labels?.[String(val)];
+        const detail = constraintHint
+          ? enumLabel ? `${enumLabel} (${constraintHint})` : constraintHint
+          : enumLabel;
         if (ctx.insideString && typeof val === "string") {
           items.push({
             label: String(val),
             kind: ENUM_MEMBER_KIND,
-            detail: labels?.[String(val)],
+            detail,
             insertText: val,
             sortText: String(i).padStart(4, "0"),
             range: makePosition(text, ctx.innerStart, ctx.innerEnd, idx),
@@ -99,7 +118,7 @@ export function createZodCompletionProvider(
           items.push({
             label: String(val),
             kind: ENUM_MEMBER_KIND,
-            detail: labels?.[String(val)],
+            detail,
             insertText: JSON.stringify(val),
             sortText: String(i).padStart(4, "0"),
             range: makePosition(text, ctx.valueStart, ctx.valueEnd, idx),

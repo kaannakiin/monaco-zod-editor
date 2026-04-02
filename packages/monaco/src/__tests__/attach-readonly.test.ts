@@ -105,8 +105,9 @@ describe("guardReadOnlyEdit — onReadOnlyViolation callback", () => {
     } as unknown as Parameters<typeof editor.emitChange>[0]);
 
     expect(onReadOnlyViolation).toHaveBeenCalledOnce();
-    const path = onReadOnlyViolation.mock.calls[0]![0] as FieldPath;
-    expect(path).toContain("status");
+    const detail = onReadOnlyViolation.mock.calls[0]![0] as { path: FieldPath; operation: string };
+    expect(detail.path).toContain("status");
+    expect(detail.operation).toBe("type");
   });
 
   test("fires callback with empty path for root-level readOnly", () => {
@@ -124,9 +125,10 @@ describe("guardReadOnlyEdit — onReadOnlyViolation callback", () => {
     } as unknown as Parameters<typeof editor.emitChange>[0]);
 
     expect(onReadOnlyViolation).toHaveBeenCalledOnce();
-    const path = onReadOnlyViolation.mock.calls[0]![0] as FieldPath;
-    expect(Array.isArray(path)).toBe(true);
-    expect(path).toHaveLength(0);
+    const detail = onReadOnlyViolation.mock.calls[0]![0] as { path: FieldPath; operation: string };
+    expect(Array.isArray(detail.path)).toBe(true);
+    expect(detail.path).toHaveLength(0);
+    expect(detail.operation).toBe("type");
   });
 });
 
@@ -193,5 +195,58 @@ describe("guardReadOnlyEdit — multi-line selection bypass", () => {
 
     expect(onReadOnlyViolation).toHaveBeenCalledOnce();
     expect(executeEditsSpy).toHaveBeenCalledWith("readOnly-revert", expect.anything());
+  });
+});
+
+describe("guardReadOnlyEdit — operation detection", () => {
+  function setupForOperation() {
+    const schema = z.object({ name: z.string(), status: z.string() });
+    const descriptor = makeDescriptorWithReadOnlyPaths(schema, ["/status"]);
+    const monaco = createMockMonaco();
+    const initialJson = JSON.stringify({ name: "Alice", status: "active" });
+    const editor = createMockEditor(initialJson, MODEL_URI);
+    const onReadOnlyViolation = vi.fn();
+    attachZodToEditor({ monaco, editor, descriptor, onReadOnlyViolation });
+    const statusOffset = initialJson.indexOf('"active"') + 1;
+    return { editor, onReadOnlyViolation, statusOffset };
+  }
+
+  test("detects type operation for small replacement", () => {
+    const { editor, onReadOnlyViolation, statusOffset } = setupForOperation();
+    editor.emitChange({
+      changes: [{ rangeOffset: statusOffset, rangeLength: 1, text: "x", range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 } }],
+    } as unknown as Parameters<typeof editor.emitChange>[0]);
+    const detail = onReadOnlyViolation.mock.calls[0]![0] as { operation: string };
+    expect(detail.operation).toBe("type");
+  });
+
+  test("detects delete operation for empty text", () => {
+    const { editor, onReadOnlyViolation, statusOffset } = setupForOperation();
+    editor.emitChange({
+      changes: [{ rangeOffset: statusOffset, rangeLength: 6, text: "", range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 } }],
+    } as unknown as Parameters<typeof editor.emitChange>[0]);
+    const detail = onReadOnlyViolation.mock.calls[0]![0] as { operation: string };
+    expect(detail.operation).toBe("delete");
+  });
+
+  test("detects paste operation for multi-line text", () => {
+    const { editor, onReadOnlyViolation, statusOffset } = setupForOperation();
+    editor.emitChange({
+      changes: [{ rangeOffset: statusOffset, rangeLength: 6, text: "pasted\nvalue", range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 } }],
+    } as unknown as Parameters<typeof editor.emitChange>[0]);
+    const detail = onReadOnlyViolation.mock.calls[0]![0] as { operation: string };
+    expect(detail.operation).toBe("paste");
+  });
+
+  test("detects replace operation for batch changes", () => {
+    const { editor, onReadOnlyViolation, statusOffset } = setupForOperation();
+    editor.emitChange({
+      changes: [
+        { rangeOffset: statusOffset, rangeLength: 1, text: "x", range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 } },
+        { rangeOffset: statusOffset + 2, rangeLength: 1, text: "y", range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 } },
+      ],
+    } as unknown as Parameters<typeof editor.emitChange>[0]);
+    const detail = onReadOnlyViolation.mock.calls[0]![0] as { operation: string };
+    expect(detail.operation).toBe("replace");
   });
 });

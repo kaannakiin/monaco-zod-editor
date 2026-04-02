@@ -176,6 +176,8 @@ createZodEditorController({
 
 Available built-ins: `locales.en` (default), `locales.tr`.
 
+Core fields: `required`, `optional`, `examples`, `placeholder`, `enumValues`, `defaultValue`, `readOnly`. Optional fields: `schemaBranch`, `constraints` (used by worker-enhanced hover).
+
 ## Multiple Editors
 
 Multiple editors sharing the same Monaco instance are supported. Each editor's schema is managed through an internal registry — disposing one does not affect others — no extra setup required.
@@ -198,6 +200,12 @@ Multiple editors sharing the same Monaco instance are supported. Each editor's s
 - `getMonaco()` / `getRawEditor()` — escape hatch to native Monaco APIs
 - `dispose()` — cleanup
 
+Options also accept:
+
+- `diagnosticsOptions` — base Monaco JSON diagnostics merged under registry-managed fields
+- `disableWorker` — disable worker-based schema enhancements (falls back to sync parser)
+- `onReadOnlyViolation(detail)` — callback with `{ path: FieldPath, operation: "type" | "paste" | "delete" | "replace" }`
+
 ### `attachZodToEditor(options)`
 
 Returns a `ZodEditorAttachment`:
@@ -207,6 +215,19 @@ Returns a `ZodEditorAttachment`:
 - `onValidationChange(listener)` — subscribe to validation results
 - `onCursorPathChange(listener)` — subscribe to breadcrumb path changes
 - `dispose()` — remove Zod features (does NOT dispose the editor)
+
+### `buildBreadcrumbLabelCache(descriptor)`
+
+Pre-computes breadcrumb labels from the schema catalog for O(1) lookup. Pass to `buildBreadcrumbSegments` for performance-optimized cursor tracking.
+
+```ts
+import { buildBreadcrumbLabelCache, buildBreadcrumbSegments } from "@zod-monaco/monaco";
+
+const cache = buildBreadcrumbLabelCache(descriptor);
+const segments = buildBreadcrumbSegments(path, descriptor, schemaCache, cache);
+// segments[1].title  — "Owner" (from metadata)
+// segments[1].readOnly — true/false
+```
 
 ### `prepareJsonEdit(editor, descriptor, newValue)`
 

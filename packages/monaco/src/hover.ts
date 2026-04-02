@@ -81,6 +81,34 @@ export function formatFieldMetadataHover(
     parts.push(`*${meta.emptyStateHint}*`);
   }
 
+  if (meta.constraints) {
+    const c = meta.constraints;
+    const constraintParts: string[] = [];
+    if (c.minimum !== undefined || c.maximum !== undefined) {
+      const min = c.minimum ?? c.exclusiveMinimum;
+      const max = c.maximum ?? c.exclusiveMaximum;
+      if (min !== undefined && max !== undefined) constraintParts.push(`${min}–${max}`);
+      else if (min !== undefined) constraintParts.push(`≥ ${min}`);
+      else if (max !== undefined) constraintParts.push(`≤ ${max}`);
+    }
+    if (c.minLength !== undefined || c.maxLength !== undefined) {
+      if (c.minLength !== undefined && c.maxLength !== undefined) constraintParts.push(`${c.minLength}–${c.maxLength} chars`);
+      else if (c.minLength !== undefined) constraintParts.push(`min ${c.minLength} chars`);
+      else if (c.maxLength !== undefined) constraintParts.push(`max ${c.maxLength} chars`);
+    }
+    if (c.pattern) constraintParts.push(`pattern: \`${c.pattern}\``);
+    if (c.multipleOf !== undefined) constraintParts.push(`multiple of ${c.multipleOf}`);
+    if (c.minItems !== undefined || c.maxItems !== undefined) {
+      if (c.minItems !== undefined && c.maxItems !== undefined) constraintParts.push(`${c.minItems}–${c.maxItems} items`);
+      else if (c.minItems !== undefined) constraintParts.push(`min ${c.minItems} items`);
+      else if (c.maxItems !== undefined) constraintParts.push(`max ${c.maxItems} items`);
+    }
+    if (c.uniqueItems) constraintParts.push("unique items");
+    if (constraintParts.length > 0) {
+      parts.push(`**${l.constraints ?? "Constraints"}:** ${constraintParts.join(", ")}`);
+    }
+  }
+
   return parts.join("\n\n");
 }
 
@@ -167,7 +195,7 @@ export function createZodHoverProvider(
 
         if (schemaBranch) {
           const l = locale ?? defaultLocale;
-          parts.push(`**${l.schemaBranch}:** ${schemaBranch}`);
+          parts.push(`**${l.schemaBranch ?? "Schema branch"}:** ${schemaBranch}`);
         }
 
         if (parts.length === 0) return null;

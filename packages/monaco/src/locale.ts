@@ -6,7 +6,8 @@ export interface ZodMonacoLocale {
   enumValues: string;
   defaultValue: string;
   readOnly: string;
-  schemaBranch: string;
+  schemaBranch?: string;
+  constraints?: string;
 }
 
 export const locales = {
@@ -19,6 +20,7 @@ export const locales = {
     defaultValue: "Default",
     readOnly: "Read-only",
     schemaBranch: "Schema branch",
+    constraints: "Constraints",
   },
   tr: {
     required: "Zorunlu",
@@ -29,6 +31,7 @@ export const locales = {
     defaultValue: "Varsayılan",
     readOnly: "Salt okunur",
     schemaBranch: "Şema dalı",
+    constraints: "Kısıtlamalar",
   },
 } satisfies Record<string, ZodMonacoLocale>;
 

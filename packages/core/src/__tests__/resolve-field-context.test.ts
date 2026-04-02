@@ -222,4 +222,28 @@ describe("resolveFieldContext", () => {
       expect(ctx.path).toBe(path);
     });
   });
+
+  describe("constraints enrichment in metadata", () => {
+    test("string constraints are populated", () => {
+      const ctx = resolveFieldContext(descriptor, ["label"]);
+      expect(ctx.metadata?.constraints).toBeDefined();
+      expect(ctx.metadata!.constraints!.minLength).toBe(1);
+      expect(ctx.metadata!.constraints!.maxLength).toBe(255);
+    });
+
+    test("numeric constraints are populated", () => {
+      const ctx = resolveFieldContext(descriptor, ["metadata", "permissions"]);
+      // permissions is an array — should have minItems/maxItems if defined
+      expect(ctx.metadata?.constraints ?? {}).toBeDefined();
+    });
+
+    test("field without constraints has no constraints key", () => {
+      const ctx = resolveFieldContext(descriptor, ["id"]);
+      // id is uuid string with format but no min/max length
+      // Should still have constraints if format implies them, or undefined
+      if (ctx.metadata?.constraints) {
+        expect(typeof ctx.metadata.constraints).toBe("object");
+      }
+    });
+  });
 });

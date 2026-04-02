@@ -24,8 +24,8 @@ export {
   positionToOffset,
   LineIndex,
 } from "./json-path-position.js";
-export { buildBreadcrumbSegments } from "./breadcrumb.js";
-export type { BreadcrumbSegment } from "./breadcrumb.js";
+export { buildBreadcrumbSegments, buildBreadcrumbLabelCache } from "./breadcrumb.js";
+export type { BreadcrumbSegment, BreadcrumbLabelCache } from "./breadcrumb.js";
 export { formatFieldMetadataHover } from "./hover.js";
 export type { ZodHoverResult, ZodHoverProvider } from "./hover.js";
 export { createZodCompletionProvider } from "./completions.js";
@@ -58,7 +58,7 @@ export type {
 } from "./monaco-types.js";
 export type { WorkerBridge } from "./worker-bridge.js";
 
-export type { ValidationResult } from "./types.js";
+export type { ValidationResult, ReadOnlyViolationDetail } from "./types.js";
 export type { SuggestionRefinement } from "@zod-monaco/core";
 export { attachZodToEditor } from "./attach.js";
 export type { AttachZodOptions, ZodEditorAttachment } from "./attach.js";
@@ -79,7 +79,7 @@ export interface CreateZodEditorControllerOptions {
   editorOptions?: Record<string, unknown>;
   validationDelay?: number;
   refinements?: readonly SuggestionRefinement[];
-  onReadOnlyViolation?: (path: import("@zod-monaco/core").FieldPath) => void;
+  onReadOnlyViolation?: (detail: import("./types.js").ReadOnlyViolationDetail) => void;
   /** Base Monaco JSON diagnostics options merged under registry-managed fields. */
   diagnosticsOptions?: import("./monaco-types.js").MonacoJsonDiagnosticsOptions;
   /** Disable worker-based enhancements (falls back to sync-only parser). */
@@ -129,7 +129,7 @@ class DefaultZodEditorController implements ZodEditorController {
   readonly #features: FeatureToggles | undefined;
   readonly #locale: ZodMonacoLocale | undefined;
   readonly #validationDelay: number | undefined;
-  readonly #onReadOnlyViolation: ((path: import("@zod-monaco/core").FieldPath) => void) | undefined;
+  readonly #onReadOnlyViolation: ((detail: import("./types.js").ReadOnlyViolationDetail) => void) | undefined;
   readonly #diagnosticsOptions: import("./monaco-types.js").MonacoJsonDiagnosticsOptions | undefined;
   readonly #disableWorker: boolean | undefined;
 

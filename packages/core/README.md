@@ -120,7 +120,9 @@ ctx.typeInfo.type;       // "string"
 ctx.typeInfo.format;     // "email"
 ctx.typeInfo.nullable;   // false
 ctx.metadata?.title;     // "Owner's email address"
+ctx.metadata?.constraints?.maxLength; // 255 (auto-populated from schema)
 ctx.required;            // true
+ctx.readOnly;            // false
 ```
 
 `path` is a `FieldPath = ReadonlyArray<string | number>`. Numeric segments represent array indices.
@@ -272,7 +274,30 @@ type FieldMetadataEntry<T> = {
   placeholder?: string;
   enumLabels?: Record<string, string>;
   emptyStateHint?: string;
+  readOnly?: boolean;
+  constraints?: FieldConstraints; // auto-populated from schema (min/max, pattern, etc.)
 };
+```
+
+### `FieldConstraints`
+
+Schema-derived validation constraints, automatically populated by `resolveFieldContext`:
+
+```ts
+interface FieldConstraints {
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  pattern?: string;
+  multipleOf?: number;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  default?: unknown;
+}
 ```
 
 ## License

@@ -192,7 +192,7 @@ createZodEditorController({
 
 Available built-ins: `locales.en` (default), `locales.tr`.
 
-The `ZodMonacoLocale` interface has five plain-text fields: `required`, `optional`, `examples`, `placeholder`, `enumValues`. The library applies bold/italic formatting automatically.
+The `ZodMonacoLocale` interface has seven plain-text fields: `required`, `optional`, `examples`, `placeholder`, `enumValues`, `defaultValue`, `readOnly`. Two optional fields (`schemaBranch`, `constraints`) control worker-enhanced hover labels. The library applies bold/italic formatting automatically.
 
 ## AI Integration
 
@@ -385,3 +385,52 @@ const attachment = attachZodToEditor({
   ],
 });
 ```
+
+---
+
+## Migration from v3.0 to v3.2
+
+### Path types: `string[]` → `PathSegment[]`
+
+`resolvePathAtOffset`, `collectPathsInRange`, and `getValueContext` now return typed path segments where array indices are `number` and object keys are `string`:
+
+```ts
+// v3.0 — all segments were strings
+resolvePathAtOffset(text, offset)?.path; // ["items", "0", "name"]
+
+// v3.2 — array indices are numbers
+resolvePathAtOffset(text, offset)?.path; // ["items", 0, "name"]
+```
+
+If your code assigns these paths to `string[]`, change the type to `PathSegment[]` (exported from `@zod-monaco/monaco`).
+
+### `onReadOnlyViolation` callback
+
+The callback now receives a `ReadOnlyViolationDetail` object instead of a plain `FieldPath`:
+
+```ts
+// v3.0
+onReadOnlyViolation: (path) => console.log(path);
+
+// v3.2
+onReadOnlyViolation: (detail) => {
+  console.log(detail.path);       // FieldPath — same as before
+  console.log(detail.operation);  // "type" | "paste" | "delete" | "replace"
+};
+```
+
+### Worker bridge (opt-in, no action needed)
+
+Hover and completion providers now use Monaco's JSON language service worker for schema-aware branch detection (`oneOf`/`anyOf`/`allOf`). This is automatic and requires no code changes. If you need to disable it:
+
+```ts
+createZodEditorController({ monaco, descriptor, disableWorker: true });
+```
+
+### Breadcrumb segments enriched
+
+`BreadcrumbSegment` now has optional `title`, `readOnly`, and `description` fields populated from schema metadata. No action needed — these are additive.
+
+### Field constraints in metadata
+
+`FieldMetadata` now has an optional `constraints` field with schema-derived validation rules (min/max, pattern, etc.). These are shown in hover tooltips automatically.

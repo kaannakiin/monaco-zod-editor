@@ -9,7 +9,7 @@ import {
   isFieldReadOnly,
   diffPathCoversReadOnlyDescendant,
 } from "@zod-monaco/core";
-import type { FeatureToggles, ValidationResult } from "./types.js";
+import type { FeatureToggles, ValidationResult, ReadOnlyViolationDetail } from "./types.js";
 import type { ZodMonacoLocale } from "./locale.js";
 import type {
   MonacoApi,
@@ -29,7 +29,8 @@ import {
 } from "./json-path-position.js";
 import { createZodHoverProvider } from "./hover.js";
 import { createZodCompletionProvider } from "./completions.js";
-import { buildBreadcrumbSegments } from "./breadcrumb.js";
+import { buildBreadcrumbSegments, buildBreadcrumbLabelCache } from "./breadcrumb.js";
+import type { BreadcrumbLabelCache } from "./breadcrumb.js";
 import { getSchemaRegistry } from "./schema-registry.js";
 import type { SchemaRegistration } from "./schema-registry.js";
 import { createWorkerBridge } from "./worker-bridge.js";
@@ -47,7 +48,7 @@ export interface AttachZodOptions {
   locale?: ZodMonacoLocale;
   validationDelay?: number;
   refinements?: readonly SuggestionRefinement[];
-  onReadOnlyViolation?: (path: FieldPath) => void;
+  onReadOnlyViolation?: (detail: ReadOnlyViolationDetail) => void;
   /** Base Monaco JSON diagnostics options merged under registry-managed fields (validate, schemas, enableSchemaRequest). */
   diagnosticsOptions?: MonacoJsonDiagnosticsOptions;
   /** Disable worker-based enhancements (falls back to sync-only parser). */
@@ -93,6 +94,10 @@ export function attachZodToEditor(
   const workerBridge: WorkerBridge | undefined = options.disableWorker
     ? undefined
     : createWorkerBridge(monaco);
+
+  let breadcrumbLabelCache: BreadcrumbLabelCache | null = descriptor
+    ? buildBreadcrumbLabelCache(descriptor)
+    : null;
 
   function getLineIndex(): LineIndex {
     if (!lineIndex) {
@@ -324,7 +329,7 @@ export function attachZodToEditor(
       idx,
     );
     const result = resolvePathAtOffset(text, offset);
-    const segments = buildBreadcrumbSegments(result?.path ?? []);
+    const segments = buildBreadcrumbSegments(result?.path ?? [], descriptor, schemaCache, breadcrumbLabelCache);
     for (const listener of cursorPathListeners) {
       listener(segments);
     }
@@ -343,6 +348,17 @@ export function attachZodToEditor(
     editor.executeEdits("readOnly-revert", [
       { range: model.getFullModelRange(), text, forceMoveMarkers: false },
     ]);
+  }
+
+  function detectOperation(
+    changes: ReadonlyArray<{ rangeOffset: number; rangeLength: number; text?: string }>,
+  ): ReadOnlyViolationDetail["operation"] {
+    if (changes.length > 1) return "replace";
+    const c = changes[0]!;
+    if (c.rangeLength === 0) return c.text?.includes("\n") ? "paste" : "type";
+    if (!c.text || c.text.length === 0) return "delete";
+    if (c.text.length > c.rangeLength * 2 || c.text.includes("\n")) return "paste";
+    return "type";
   }
 
   function guardReadOnlyEdit(event: MonacoEditorChangeEvent): void {
@@ -368,13 +384,16 @@ export function attachZodToEditor(
 
     if (meta.readOnly) {
       isUndoingReadOnly = true;
-      options.onReadOnlyViolation?.([] as unknown as FieldPath);
+      options.onReadOnlyViolation?.({
+        path: [] as unknown as FieldPath,
+        operation: "type",
+      });
       revertToText(previousText);
       return;
     }
 
     const changes = event.changes as
-      | ReadonlyArray<{ rangeOffset: number; rangeLength: number }>
+      | ReadonlyArray<{ rangeOffset: number; rangeLength: number; text?: string }>
       | undefined;
     if (!changes?.length) {
       previousText = editor.getValue();
@@ -413,7 +432,8 @@ export function attachZodToEditor(
 
     if (touchesReadOnly) {
       isUndoingReadOnly = true;
-      options.onReadOnlyViolation?.(violatingPath);
+      const operation = detectOperation(changes);
+      options.onReadOnlyViolation?.({ path: violatingPath, operation });
       revertToText(previousText);
       return;
     }
@@ -450,6 +470,7 @@ export function attachZodToEditor(
     setDescriptor(newDescriptor: SchemaDescriptor | null): void {
       descriptor = newDescriptor;
       schemaCache = descriptor ? new SchemaCache(descriptor.jsonSchema) : null;
+      breadcrumbLabelCache = descriptor ? buildBreadcrumbLabelCache(descriptor) : null;
       previousText = editor.getValue();
       applyJsonSchema();
       registerHoverProvider();

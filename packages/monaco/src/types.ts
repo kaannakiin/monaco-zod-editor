@@ -1,9 +1,16 @@
-import type { ZodIssue } from "@zod-monaco/core";
+import type { ZodIssue, FieldPath } from "@zod-monaco/core";
 
 export interface ValidationResult {
   valid: boolean;
   issues: ZodIssue[];
   parseError?: string;
+}
+
+export interface ReadOnlyViolationDetail {
+  /** The field path that was violated */
+  path: FieldPath;
+  /** What kind of edit triggered the violation */
+  operation: "type" | "paste" | "delete" | "replace";
 }
 
 export interface FeatureToggles {

@@ -1,5 +1,20 @@
 import type { ZodType, ZodSafeParseResult } from "zod";
 
+export interface FieldConstraints {
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  pattern?: string;
+  multipleOf?: number;
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  default?: unknown;
+}
+
 export interface FieldMetadata {
   title?: string;
   description?: string;
@@ -8,6 +23,7 @@ export interface FieldMetadata {
   enumLabels?: Record<string, string>;
   emptyStateHint?: string;
   readOnly?: boolean;
+  constraints?: FieldConstraints;
 }
 
 /**

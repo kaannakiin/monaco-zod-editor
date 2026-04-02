@@ -9,6 +9,7 @@ export type {
   SchemaDescriptor,
   SchemaMetadata,
   FieldMetadata,
+  FieldConstraints,
   FieldMetadataEntry,
   ResolvedMetadata,
   SchemaPath,

@@ -247,11 +247,33 @@ export function resolveFieldContext(
     }
   }
 
+  const typeInfo = extractTypeInfo(rawNode);
+
+  const enrichedMetadata = metadata ? { ...metadata } : undefined;
+  if (enrichedMetadata && typeInfo) {
+    const c: Record<string, unknown> = {};
+    if (typeInfo.minLength !== undefined) c.minLength = typeInfo.minLength;
+    if (typeInfo.maxLength !== undefined) c.maxLength = typeInfo.maxLength;
+    if (typeInfo.minimum !== undefined) c.minimum = typeInfo.minimum;
+    if (typeInfo.maximum !== undefined) c.maximum = typeInfo.maximum;
+    if (typeInfo.exclusiveMinimum !== undefined) c.exclusiveMinimum = typeInfo.exclusiveMinimum;
+    if (typeInfo.exclusiveMaximum !== undefined) c.exclusiveMaximum = typeInfo.exclusiveMaximum;
+    if (typeInfo.pattern !== undefined) c.pattern = typeInfo.pattern;
+    if (typeInfo.multipleOf !== undefined) c.multipleOf = typeInfo.multipleOf;
+    if (typeInfo.minItems !== undefined) c.minItems = typeInfo.minItems;
+    if (typeInfo.maxItems !== undefined) c.maxItems = typeInfo.maxItems;
+    if (typeInfo.uniqueItems !== undefined) c.uniqueItems = typeInfo.uniqueItems;
+    if (typeInfo.default !== undefined) c.default = typeInfo.default;
+    if (Object.keys(c).length > 0) {
+      enrichedMetadata.constraints = c as import("./types.js").FieldConstraints;
+    }
+  }
+
   return {
     path,
-    metadata,
+    metadata: enrichedMetadata,
     schemaNode,
-    typeInfo: extractTypeInfo(rawNode),
+    typeInfo,
     required,
     readOnly: isFieldReadOnly(descriptor.metadata, path),
   };
