@@ -32,6 +32,8 @@ import { createZodCompletionProvider } from "./completions.js";
 import { buildBreadcrumbSegments } from "./breadcrumb.js";
 import { getSchemaRegistry } from "./schema-registry.js";
 import type { SchemaRegistration } from "./schema-registry.js";
+import { createWorkerBridge } from "./worker-bridge.js";
+import type { WorkerBridge } from "./worker-bridge.js";
 
 const DEFAULT_EDITOR_LANGUAGE = "json";
 const DEFAULT_VALIDATION_DELAY = 300;
@@ -48,6 +50,8 @@ export interface AttachZodOptions {
   onReadOnlyViolation?: (path: FieldPath) => void;
   /** Base Monaco JSON diagnostics options merged under registry-managed fields (validate, schemas, enableSchemaRequest). */
   diagnosticsOptions?: MonacoJsonDiagnosticsOptions;
+  /** Disable worker-based enhancements (falls back to sync-only parser). */
+  disableWorker?: boolean;
 }
 
 export interface ZodEditorAttachment extends MonacoDisposable {
@@ -85,6 +89,10 @@ export function attachZodToEditor(
   let completionDisposable: MonacoDisposable | null = null;
   let schemaRegistration: SchemaRegistration | null = null;
   let validationTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const workerBridge: WorkerBridge | undefined = options.disableWorker
+    ? undefined
+    : createWorkerBridge(monaco);
 
   function getLineIndex(): LineIndex {
     if (!lineIndex) {
@@ -143,6 +151,7 @@ export function attachZodToEditor(
         locale,
         schemaCache ?? undefined,
         () => lineIndex,
+        workerBridge,
       ),
     );
   }
@@ -164,6 +173,7 @@ export function attachZodToEditor(
         schemaCache ?? undefined,
         () => lineIndex,
         refinements.length > 0 ? refinements : undefined,
+        workerBridge,
       ),
     );
   }
@@ -229,16 +239,48 @@ export function attachZodToEditor(
     }
 
     const validationIndex = getLineIndex();
-    const markers = result.error.issues
-      .map((issue) => issueToMarker(text, issue, validationIndex))
-      .filter((m): m is MonacoMarkerData => m !== null);
+    const issues = result.error.issues;
 
-    monaco.editor.setModelMarkers(model, MARKER_OWNER, markers);
-    const vResult: ValidationResult = {
-      valid: false,
-      issues: result.error.issues,
+    const applyMarkers = (markers: MonacoMarkerData[]) => {
+      monaco.editor.setModelMarkers(model, MARKER_OWNER, markers);
+      const vResult: ValidationResult = { valid: false, issues };
+      for (const l of validationListeners) l(vResult);
     };
-    for (const l of validationListeners) l(vResult);
+
+    if (workerBridge?.isAvailable()) {
+      workerBridge.getDocument(model).then(
+        (doc) => {
+          const markers = issues
+            .map((issue) => {
+              if (doc?.root && issue.path.length > 0) {
+                const syncPos = resolveJsonPath(text, issue.path, validationIndex);
+                if (syncPos) {
+                  return {
+                    severity: monaco.MarkerSeverity.Error,
+                    message: issue.message,
+                    ...syncPos,
+                    source: MARKER_OWNER,
+                  } satisfies MonacoMarkerData;
+                }
+              }
+              return issueToMarker(text, issue, validationIndex);
+            })
+            .filter((m): m is MonacoMarkerData => m !== null);
+          applyMarkers(markers);
+        },
+        () => {
+          const markers = issues
+            .map((issue) => issueToMarker(text, issue, validationIndex))
+            .filter((m): m is MonacoMarkerData => m !== null);
+          applyMarkers(markers);
+        },
+      );
+    } else {
+      const markers = issues
+        .map((issue) => issueToMarker(text, issue, validationIndex))
+        .filter((m): m is MonacoMarkerData => m !== null);
+      applyMarkers(markers);
+    }
   }
 
   function issueToMarker(
@@ -385,6 +427,20 @@ export function attachZodToEditor(
     scheduleValidation();
   });
 
+  if (features.hover || features.completions) {
+    monaco.languages.json.jsonDefaults.setModeConfiguration?.({
+      hovers: !features.hover,
+      completionItems: !features.completions,
+      documentFormattingEdits: true,
+      documentSymbols: true,
+      foldingRanges: true,
+      diagnostics: true,
+      selectionRanges: true,
+      tokens: true,
+      colors: true,
+    });
+  }
+
   applyJsonSchema();
   registerHoverProvider();
   registerCompletionProvider();
@@ -449,6 +505,8 @@ export function attachZodToEditor(
 
       cursorDisposable.dispose();
       changeDisposable.dispose();
+
+      workerBridge?.dispose();
 
       validationListeners.clear();
       cursorPathListeners.clear();

@@ -111,6 +111,46 @@ export interface MonacoJsonDiagnosticsOptions {
   schemaRequest?: "error" | "warning" | "ignore";
 }
 
+export interface MonacoJsonModeConfiguration {
+  documentFormattingEdits?: boolean;
+  documentRangeFormattingEdits?: boolean;
+  completionItems?: boolean;
+  hovers?: boolean;
+  documentSymbols?: boolean;
+  tokens?: boolean;
+  colors?: boolean;
+  foldingRanges?: boolean;
+  diagnostics?: boolean;
+  selectionRanges?: boolean;
+}
+
+// ── JSON Worker types ──────────────────────────────────────────────
+
+export interface MonacoJsonWorker {
+  parseJSONDocument(uri: string): Promise<MonacoJsonDocument>;
+  getMatchingSchemas(uri: string): Promise<MonacoMatchingSchema[]>;
+}
+
+export interface MonacoJsonDocument {
+  root: MonacoJsonNode | undefined;
+  getNodeFromOffset(offset: number): MonacoJsonNode | undefined;
+}
+
+export interface MonacoJsonNode {
+  type: "object" | "array" | "string" | "number" | "boolean" | "null" | "property";
+  offset: number;
+  length: number;
+  parent?: MonacoJsonNode;
+  children?: MonacoJsonNode[];
+  value?: unknown;
+  colonOffset?: number;
+}
+
+export interface MonacoMatchingSchema {
+  node: MonacoJsonNode;
+  schema: Record<string, unknown>;
+}
+
 export interface MonacoEditorApi {
   create(
     element: HTMLElement,
@@ -143,7 +183,9 @@ export interface MonacoApi {
     json: {
       jsonDefaults: {
         setDiagnosticsOptions(options: MonacoJsonDiagnosticsOptions): void;
+        setModeConfiguration?(options: MonacoJsonModeConfiguration): void;
       };
+      getWorker?(): Promise<(...uris: unknown[]) => Promise<MonacoJsonWorker>>;
     };
     register(language: MonacoLanguageRegistration): void;
     setMonarchTokensProvider(
@@ -161,12 +203,14 @@ export interface MonacoApi {
           model: MonacoModelLike,
           position: MonacoPosition,
         ):
-          | {
-              contents: Array<{ value: string }>;
-              range?: MonacoRange;
-            }
+          | { contents: Array<{ value: string }>; range?: MonacoRange }
           | null
-          | undefined;
+          | undefined
+          | PromiseLike<
+              | { contents: Array<{ value: string }>; range?: MonacoRange }
+              | null
+              | undefined
+            >;
       },
     ): MonacoDisposable;
     registerCompletionItemProvider(
@@ -177,7 +221,11 @@ export interface MonacoApi {
           model: MonacoModelLike,
           position: MonacoPosition,
           context: MonacoCompletionContext,
-        ): MonacoCompletionList | null | undefined;
+        ):
+          | MonacoCompletionList
+          | null
+          | undefined
+          | PromiseLike<MonacoCompletionList | null | undefined>;
       },
     ): MonacoDisposable;
   };

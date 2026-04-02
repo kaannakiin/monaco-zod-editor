@@ -47,10 +47,16 @@ export type {
   MonacoCompletionList,
   MonacoCompletionContext,
   MonacoJsonDiagnosticsOptions,
+  MonacoJsonModeConfiguration,
+  MonacoJsonWorker,
+  MonacoJsonDocument,
+  MonacoJsonNode,
+  MonacoMatchingSchema,
   MonacoEditorApi,
   MonacoLanguageRegistration,
   MonacoApi,
 } from "./monaco-types.js";
+export type { WorkerBridge } from "./worker-bridge.js";
 
 export type { ValidationResult } from "./types.js";
 export type { SuggestionRefinement } from "@zod-monaco/core";
@@ -76,6 +82,8 @@ export interface CreateZodEditorControllerOptions {
   onReadOnlyViolation?: (path: import("@zod-monaco/core").FieldPath) => void;
   /** Base Monaco JSON diagnostics options merged under registry-managed fields. */
   diagnosticsOptions?: import("./monaco-types.js").MonacoJsonDiagnosticsOptions;
+  /** Disable worker-based enhancements (falls back to sync-only parser). */
+  disableWorker?: boolean;
 }
 
 export interface ZodEditorController extends MonacoDisposable {
@@ -123,6 +131,7 @@ class DefaultZodEditorController implements ZodEditorController {
   readonly #validationDelay: number | undefined;
   readonly #onReadOnlyViolation: ((path: import("@zod-monaco/core").FieldPath) => void) | undefined;
   readonly #diagnosticsOptions: import("./monaco-types.js").MonacoJsonDiagnosticsOptions | undefined;
+  readonly #disableWorker: boolean | undefined;
 
   #editor: MonacoStandaloneEditorLike | null = null;
   #changeDisposable: MonacoDisposable | null = null;
@@ -144,6 +153,7 @@ class DefaultZodEditorController implements ZodEditorController {
     this.#features = options.features;
     this.#onReadOnlyViolation = options.onReadOnlyViolation;
     this.#diagnosticsOptions = options.diagnosticsOptions;
+    this.#disableWorker = options.disableWorker;
   }
 
   mount(element: HTMLElement): MonacoStandaloneEditorLike {
@@ -168,6 +178,7 @@ class DefaultZodEditorController implements ZodEditorController {
       refinements: this.#refinements,
       onReadOnlyViolation: this.#onReadOnlyViolation,
       diagnosticsOptions: this.#diagnosticsOptions,
+      disableWorker: this.#disableWorker,
     });
 
     this.#changeDisposable = this.#editor.onDidChangeModelContent((event) => {

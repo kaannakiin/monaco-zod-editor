@@ -5,11 +5,12 @@ import type {
   SchemaDescriptor,
 } from "@zod-monaco/core";
 import { resolveFieldContext, SchemaCache } from "@zod-monaco/core";
-import type { MonacoModelLike, MonacoPosition } from "./monaco-types.js";
+import type { MonacoModelLike, MonacoPosition, MonacoMatchingSchema } from "./monaco-types.js";
 import { positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
 import type { LineIndex } from "./json-path-position.js";
 import type { ZodMonacoLocale } from "./locale.js";
 import { defaultLocale } from "./locale.js";
+import type { WorkerBridge } from "./worker-bridge.js";
 
 export interface ZodHoverResult {
   contents: Array<{ value: string }>;
@@ -25,7 +26,7 @@ export interface ZodHoverProvider {
   provideHover(
     model: MonacoModelLike,
     position: MonacoPosition,
-  ): ZodHoverResult | null;
+  ): ZodHoverResult | null | PromiseLike<ZodHoverResult | null>;
 }
 
 export function formatFieldMetadataHover(
@@ -89,6 +90,7 @@ export function createZodHoverProvider(
   locale?: ZodMonacoLocale,
   cache?: SchemaCache,
   getLineIndex?: () => LineIndex | null,
+  workerBridge?: WorkerBridge,
 ): ZodHoverProvider {
   const resolveRequiredState = (
     fieldPath: FieldPath,
@@ -128,7 +130,7 @@ export function createZodHoverProvider(
     provideHover(
       model: MonacoModelLike,
       position: MonacoPosition,
-    ): ZodHoverResult | null {
+    ): ZodHoverResult | null | PromiseLike<ZodHoverResult | null> {
       if (model.uri.toString() !== modelUri) {
         return null;
       }
@@ -157,16 +159,39 @@ export function createZodHoverProvider(
       const meta = fieldCtx.metadata ?? {};
       const required = resolveRequiredState(fieldPath, fieldCtx.required);
 
-      const content = formatFieldMetadataHover(meta, required, locale, fieldCtx.typeInfo, fieldCtx.readOnly);
+      const buildResult = (schemaBranch?: string): ZodHoverResult | null => {
+        const parts: string[] = [];
 
-      if (!content) {
-        return null;
+        const base = formatFieldMetadataHover(meta, required, locale, fieldCtx.typeInfo, fieldCtx.readOnly);
+        if (base) parts.push(base);
+
+        if (schemaBranch) {
+          const l = locale ?? defaultLocale;
+          parts.push(`**${l.schemaBranch}:** ${schemaBranch}`);
+        }
+
+        if (parts.length === 0) return null;
+
+        return {
+          contents: [{ value: parts.join("\n\n") }],
+          range: resolved.keyRange,
+        };
+      };
+
+      if (!workerBridge?.isAvailable()) {
+        return buildResult();
       }
 
-      return {
-        contents: [{ value: content }],
-        range: resolved.keyRange,
-      };
+      return workerBridge.getMatchingSchemas(model).then(
+        (schemas) => {
+          const matchAtOffset = schemas.find(
+            (s) => s.node.offset <= offset && offset < s.node.offset + s.node.length,
+          );
+          const branchTitle = matchAtOffset?.schema.title as string | undefined;
+          return buildResult(branchTitle);
+        },
+        () => buildResult(),
+      );
     },
   };
 }

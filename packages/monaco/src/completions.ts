@@ -21,6 +21,7 @@ import {
   makePosition,
 } from "./json-path-position.js";
 import type { LineIndex } from "./json-path-position.js";
+import type { WorkerBridge } from "./worker-bridge.js";
 
 export interface ZodCompletionProvider {
   triggerCharacters?: string[];
@@ -28,7 +29,7 @@ export interface ZodCompletionProvider {
     model: MonacoModelLike,
     position: MonacoPosition,
     context: MonacoCompletionContext,
-  ): MonacoCompletionList | null;
+  ): MonacoCompletionList | null | PromiseLike<MonacoCompletionList | null>;
 }
 
 const ENUM_MEMBER_KIND = 17;
@@ -62,15 +63,90 @@ export function createZodCompletionProvider(
   cache?: SchemaCache,
   getLineIndex?: () => LineIndex | null,
   refinements?: readonly SuggestionRefinement[],
+  workerBridge?: WorkerBridge,
 ): ZodCompletionProvider {
   const triggerCharacters = deriveTriggerCharacters(refinements);
+
+  function buildItems(
+    text: string,
+    offset: number,
+    ctx: NonNullable<ReturnType<typeof getValueContext>>,
+    fieldPath: FieldPath,
+    idx: LineIndex | undefined,
+    branchEnums?: unknown[],
+  ): MonacoCompletionItem[] {
+    const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
+
+    if (fieldCtx.readOnly) return [];
+
+    const items: MonacoCompletionItem[] = [];
+
+    const enumValues = branchEnums ?? fieldCtx.typeInfo.enum;
+    if (Array.isArray(enumValues)) {
+      const labels = fieldCtx.metadata?.enumLabels;
+      for (let i = 0; i < enumValues.length; i++) {
+        const val = enumValues[i];
+        if (ctx.insideString && typeof val === "string") {
+          items.push({
+            label: String(val),
+            kind: ENUM_MEMBER_KIND,
+            detail: labels?.[String(val)],
+            insertText: val,
+            sortText: String(i).padStart(4, "0"),
+            range: makePosition(text, ctx.innerStart, ctx.innerEnd, idx),
+          });
+        } else {
+          items.push({
+            label: String(val),
+            kind: ENUM_MEMBER_KIND,
+            detail: labels?.[String(val)],
+            insertText: JSON.stringify(val),
+            sortText: String(i).padStart(4, "0"),
+            range: makePosition(text, ctx.valueStart, ctx.valueEnd, idx),
+          });
+        }
+      }
+    }
+
+    if (items.length === 0 && refinements?.length) {
+      for (const ref of refinements) {
+        if (!matchesSchemaPath(fieldPath, ref.path as readonly string[]))
+          continue;
+
+        if (ref.triggerPattern && ctx.insideString) {
+          const textBeforeCursor = text.slice(ctx.innerStart, offset);
+          if (!new RegExp(ref.triggerPattern).test(textBeforeCursor))
+            continue;
+        }
+
+        const range = ctx.insideString
+          ? makePosition(text, ctx.innerStart, ctx.innerEnd, idx)
+          : makePosition(text, ctx.valueStart, ctx.valueEnd, idx);
+
+        for (let i = 0; i < ref.suggestions.length; i++) {
+          const suggestion = ref.suggestions[i]!;
+          items.push({
+            label: suggestion,
+            kind: TEXT_KIND,
+            insertText: ctx.insideString
+              ? suggestion
+              : JSON.stringify(suggestion),
+            sortText: `z${String(i).padStart(4, "0")}`,
+            range,
+          });
+        }
+      }
+    }
+
+    return items;
+  }
 
   return {
     triggerCharacters,
     provideCompletionItems(
       model: MonacoModelLike,
       position: MonacoPosition,
-    ): MonacoCompletionList | null {
+    ): MonacoCompletionList | null | PromiseLike<MonacoCompletionList | null> {
       if (model.uri.toString() !== modelUri) {
         return null;
       }
@@ -90,70 +166,24 @@ export function createZodCompletionProvider(
       }
 
       const fieldPath: FieldPath = ctx.path;
-      const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
 
-      if (fieldCtx.readOnly) return null;
+      const toResult = (items: MonacoCompletionItem[]): MonacoCompletionList | null =>
+        items.length > 0 ? { suggestions: items } : null;
 
-      const items: MonacoCompletionItem[] = [];
-
-      const enumValues = fieldCtx.typeInfo.enum;
-      if (Array.isArray(enumValues)) {
-        const labels = fieldCtx.metadata?.enumLabels;
-        for (let i = 0; i < enumValues.length; i++) {
-          const val = enumValues[i];
-          if (ctx.insideString && typeof val === "string") {
-            items.push({
-              label: String(val),
-              kind: ENUM_MEMBER_KIND,
-              detail: labels?.[String(val)],
-              insertText: val,
-              sortText: String(i).padStart(4, "0"),
-              range: makePosition(text, ctx.innerStart, ctx.innerEnd, idx),
-            });
-          } else {
-            items.push({
-              label: String(val),
-              kind: ENUM_MEMBER_KIND,
-              detail: labels?.[String(val)],
-              insertText: JSON.stringify(val),
-              sortText: String(i).padStart(4, "0"),
-              range: makePosition(text, ctx.valueStart, ctx.valueEnd, idx),
-            });
-          }
-        }
+      if (!workerBridge?.isAvailable()) {
+        return toResult(buildItems(text, offset, ctx, fieldPath, idx));
       }
 
-      if (items.length === 0 && refinements?.length) {
-        for (const ref of refinements) {
-          if (!matchesSchemaPath(fieldPath, ref.path as readonly string[]))
-            continue;
-
-          if (ref.triggerPattern && ctx.insideString) {
-            const textBeforeCursor = text.slice(ctx.innerStart, offset);
-            if (!new RegExp(ref.triggerPattern).test(textBeforeCursor))
-              continue;
-          }
-
-          const range = ctx.insideString
-            ? makePosition(text, ctx.innerStart, ctx.innerEnd, idx)
-            : makePosition(text, ctx.valueStart, ctx.valueEnd, idx);
-
-          for (let i = 0; i < ref.suggestions.length; i++) {
-            const suggestion = ref.suggestions[i]!;
-            items.push({
-              label: suggestion,
-              kind: TEXT_KIND,
-              insertText: ctx.insideString
-                ? suggestion
-                : JSON.stringify(suggestion),
-              sortText: `z${String(i).padStart(4, "0")}`,
-              range,
-            });
-          }
-        }
-      }
-
-      return items.length > 0 ? { suggestions: items } : null;
+      return workerBridge.getMatchingSchemas(model).then(
+        (schemas) => {
+          const matchAtOffset = schemas.find(
+            (s) => s.node.offset <= offset && offset < s.node.offset + s.node.length,
+          );
+          const branchEnum = matchAtOffset?.schema.enum as unknown[] | undefined;
+          return toResult(buildItems(text, offset, ctx, fieldPath, idx, branchEnum));
+        },
+        () => toResult(buildItems(text, offset, ctx, fieldPath, idx)),
+      );
     },
   };
 }
