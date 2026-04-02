@@ -1,5 +1,39 @@
 # @zod-monaco/monaco
 
+## 3.2.0
+
+### Minor Changes
+
+- 95386a7: feat: JSON worker bridge integration for schema-aware hover and completions
+  - Added `WorkerBridge` — cached, timeout-guarded access to Monaco's JSON language service worker via `json.getWorker()`
+  - Hover provider now async: enriches tooltips with `MatchingSchema` branch info for `oneOf`/`anyOf`/`allOf` schemas
+  - Completion provider now async: uses worker's schema branch detection for accurate union enum suggestions
+  - Added `setModeConfiguration()` call to disable Monaco's built-in hover/completions when custom providers are active
+  - Validation pipeline uses worker AST for marker positioning when available
+  - New `disableWorker` option on `AttachZodOptions` and `CreateZodEditorControllerOptions`
+  - Graceful fallback: if worker is unavailable (CORS, CDN), all features continue working via sync custom parser
+  - New types exported: `WorkerBridge`, `MonacoJsonWorker`, `MonacoJsonDocument`, `MonacoJsonNode`, `MonacoMatchingSchema`, `MonacoJsonModeConfiguration`
+
+### Patch Changes
+
+- Updated dependencies [95386a7]
+  - @zod-monaco/core@3.2.0
+
+## 3.1.0
+
+### Minor Changes
+
+- 116c428: fix: typed path segments, deduplicate syntax markers, merge diagnostics options
+  - **Path segment typing (Bulgu 1):** Parser now returns `number` for array indices and `string` for object keys. Removes blind `/^\d+$/ → Number()` coercion from hover, completions, attach, and breadcrumb. Fixes incorrect read-only, hover, and completion behavior for numeric-looking object keys like `{"0": "val"}`.
+  - **Deduplicate syntax markers (Bulgu 2):** Removed custom parse error marker — syntax errors are now handled solely by Monaco's built-in JSON validator. `ValidationResult.parseError` is still populated for listeners.
+  - **Merge diagnostics options (Bulgu 3):** Added `setBaseOptions()` to `ZodSchemaRegistry` and `diagnosticsOptions` to `AttachZodOptions` / `CreateZodEditorControllerOptions`. Consumer settings like `allowComments` and `trailingCommas` are no longer overwritten on schema flush.
+  - **Test coverage (Bulgu 4):** Added 6 typed segment tests covering numeric-looking object keys, mixed nesting, deep structures, and range queries.
+
+### Patch Changes
+
+- Updated dependencies [116c428]
+  - @zod-monaco/core@3.1.0
+
 ## 3.0.0
 
 ### Major Changes

@@ -1,6 +1,6 @@
 {
   "name": "angular-web",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "scripts": {
     "ng": "ng",
     "dev": "rm -rf .angular/cache && ng serve --port 4201",
