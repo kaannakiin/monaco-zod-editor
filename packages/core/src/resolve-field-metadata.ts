@@ -3,15 +3,46 @@ import { resolveJsonSchemaMetadata } from "./resolve-json-schema-metadata.js";
 import { toJsonPointer, fromJsonPointer } from "./path-utils.js";
 import type { SchemaCache } from "./schema-cache.js";
 
+/** Pre-computed suffix index entry. */
+interface SuffixEntry {
+  segments: string[];
+  meta: FieldMetadata;
+}
+
+/** Cached suffix index keyed by the `fields` object identity. */
+const suffixIndexCache = new WeakMap<object, Map<string, SuffixEntry[]>>();
+
+/**
+ * Builds (or retrieves cached) suffix index for metadata fields.
+ * Groups entries by their last segment for O(1) amortized lookup.
+ */
+function getSuffixIndex(
+  fields: Partial<Record<string, FieldMetadata>>,
+): Map<string, SuffixEntry[]> {
+  let index = suffixIndexCache.get(fields as object);
+  if (index) return index;
+
+  index = new Map<string, SuffixEntry[]>();
+  for (const [pointer, meta] of Object.entries(fields)) {
+    if (!meta) continue;
+    const segments = fromJsonPointer(pointer);
+    if (segments.length === 0) continue;
+    const lastSeg = segments[segments.length - 1]!;
+    let bucket = index.get(lastSeg);
+    if (!bucket) {
+      bucket = [];
+      index.set(lastSeg, bucket);
+    }
+    bucket.push({ segments, meta });
+  }
+  suffixIndexCache.set(fields as object, index);
+  return index;
+}
+
 /**
  * Finds explicit metadata for a runtime path by suffix-matching against
- * metadata entries. Numeric (array index) segments are stripped from the
- * runtime path before comparison, then each entry's path is tested as a
- * suffix of the stripped path. The longest (most specific) match wins.
- *
- * This enables recursive schemas to reuse metadata definitions:
- * e.g. metadata for `["Children"]` also applies to
- * `["Children", 0, "Children", 0]` at any nesting depth.
+ * metadata entries. Uses a pre-computed index keyed by last segment
+ * for O(1) amortized lookup instead of O(N) linear scan.
  */
 function findRecursiveMatch(
   fields: Partial<Record<string, FieldMetadata>>,
@@ -22,12 +53,16 @@ function findRecursiveMatch(
   );
   if (stripped.length === 0) return undefined;
 
+  const index = getSuffixIndex(fields);
+  const lastSeg = stripped[stripped.length - 1]!;
+  const bucket = index.get(lastSeg);
+  if (!bucket) return undefined;
+
   let bestMatch: FieldMetadata | undefined;
   let bestLength = 0;
 
-  for (const [pointer, meta] of Object.entries(fields)) {
-    const entrySegments = fromJsonPointer(pointer);
-    if (entrySegments.length === 0 || entrySegments.length > stripped.length) continue;
+  for (const { segments: entrySegments, meta } of bucket) {
+    if (entrySegments.length > stripped.length) continue;
 
     const offset = stripped.length - entrySegments.length;
     let matches = true;

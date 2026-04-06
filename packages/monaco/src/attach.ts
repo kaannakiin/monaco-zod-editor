@@ -318,21 +318,27 @@ export function attachZodToEditor(
     };
   }
 
+  let cursorTimeout: ReturnType<typeof setTimeout> | null = null;
+  const CURSOR_DEBOUNCE_MS = 50;
+
   const cursorDisposable = editor.onDidChangeCursorPosition((event) => {
     if (cursorPathListeners.size === 0) return;
-    const text = editor.getValue();
-    const idx = getLineIndex();
-    const offset = positionToOffset(
-      text,
-      event.position.lineNumber,
-      event.position.column,
-      idx,
-    );
-    const result = resolvePathAtOffset(text, offset);
-    const segments = buildBreadcrumbSegments(result?.path ?? [], descriptor, schemaCache, breadcrumbLabelCache);
-    for (const listener of cursorPathListeners) {
-      listener(segments);
-    }
+    if (cursorTimeout) clearTimeout(cursorTimeout);
+    cursorTimeout = setTimeout(() => {
+      const text = editor.getValue();
+      const idx = getLineIndex();
+      const offset = positionToOffset(
+        text,
+        event.position.lineNumber,
+        event.position.column,
+        idx,
+      );
+      const result = resolvePathAtOffset(text, offset);
+      const segments = buildBreadcrumbSegments(result?.path ?? [], descriptor, schemaCache, breadcrumbLabelCache);
+      for (const listener of cursorPathListeners) {
+        listener(segments);
+      }
+    }, CURSOR_DEBOUNCE_MS);
   });
 
   let previousText: string = editor.getValue();
@@ -442,7 +448,16 @@ export function attachZodToEditor(
   }
 
   const changeDisposable = editor.onDidChangeModelContent((event) => {
-    lineIndex = null;
+    // Incrementally update LineIndex instead of full rebuild
+    const changes = event.changes as
+      | ReadonlyArray<{ rangeOffset: number; rangeLength: number; text?: string }>
+      | undefined;
+    if (lineIndex && changes?.length === 1) {
+      const c = changes[0]!;
+      lineIndex.applyEdit(c.rangeOffset, c.rangeLength, c.text ?? "");
+    } else {
+      lineIndex = null;
+    }
     guardReadOnlyEdit(event);
     scheduleValidation();
   });
@@ -509,6 +524,10 @@ export function attachZodToEditor(
       if (validationTimeout) {
         clearTimeout(validationTimeout);
         validationTimeout = null;
+      }
+      if (cursorTimeout) {
+        clearTimeout(cursorTimeout);
+        cursorTimeout = null;
       }
 
       const model = editor.getModel();

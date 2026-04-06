@@ -48,6 +48,55 @@ export class LineIndex {
       endColumn: e.col,
     };
   }
+
+  /**
+   * Incrementally updates the line offset index after a single edit.
+   * O(log n + affected lines) instead of O(n) full rebuild.
+   *
+   * @param offset - byte offset where the edit starts
+   * @param deleteCount - number of bytes deleted
+   * @param insertedText - the text that was inserted at offset
+   */
+  applyEdit(offset: number, deleteCount: number, insertedText: string): void {
+    // Find the line containing the edit start
+    let lo = 0;
+    let hi = this.#offsets.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.#offsets[mid]! <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    const startLineIdx = lo;
+
+    // Find lines within the deleted range
+    const deleteEnd = offset + deleteCount;
+    let endLineIdx = startLineIdx;
+    while (endLineIdx + 1 < this.#offsets.length && this.#offsets[endLineIdx + 1]! <= deleteEnd) {
+      endLineIdx++;
+    }
+
+    // Count newlines in inserted text and record their offsets
+    const newLineOffsets: number[] = [];
+    for (let i = 0; i < insertedText.length; i++) {
+      if (insertedText[i] === "\n") {
+        newLineOffsets.push(offset + i + 1);
+      }
+    }
+
+    // Number of lines removed between startLineIdx and endLineIdx
+    const linesRemoved = endLineIdx - startLineIdx;
+    const linesAdded = newLineOffsets.length;
+    const delta = insertedText.length - deleteCount;
+
+    // Splice: remove old line entries, insert new ones
+    this.#offsets.splice(startLineIdx + 1, linesRemoved, ...newLineOffsets);
+
+    // Shift all subsequent line offsets by the net change in bytes
+    const shiftStart = startLineIdx + 1 + linesAdded;
+    for (let i = shiftStart; i < this.#offsets.length; i++) {
+      this.#offsets[i] = this.#offsets[i]! + delta;
+    }
+  }
 }
 
 /**

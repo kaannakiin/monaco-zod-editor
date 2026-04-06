@@ -44,6 +44,8 @@ export function applyEnumRefinements(
   }
 }
 
+const MAX_ENUM_DEPTH = 50;
+
 function collectEnumViolations(
   data: unknown,
   schemaPath: readonly string[],
@@ -51,7 +53,10 @@ function collectEnumViolations(
   runtimePath: PropertyKey[],
   allowed: readonly string[],
   issues: $ZodIssue[],
+  depth = 0,
 ): void {
+  if (depth > MAX_ENUM_DEPTH) return;
+
   if (schemaIndex === schemaPath.length) {
     if (typeof data === "string" && !allowed.includes(data)) {
       issues.push({
@@ -76,6 +81,7 @@ function collectEnumViolations(
         [...runtimePath, i],
         allowed,
         issues,
+        depth + 1,
       );
     }
     return;
@@ -90,6 +96,7 @@ function collectEnumViolations(
       [...runtimePath, key],
       allowed,
       issues,
+      depth + 1,
     );
   }
 }

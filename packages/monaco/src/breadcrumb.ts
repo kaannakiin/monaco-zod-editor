@@ -32,7 +32,7 @@ export interface BreadcrumbLabelCache {
 export function buildBreadcrumbLabelCache(
   descriptor: SchemaDescriptor,
 ): BreadcrumbLabelCache {
-  const catalog = buildFieldCatalog(descriptor, { maxDepth: 15 });
+  const catalog = buildFieldCatalog(descriptor, { maxDepth: 8 });
   const map = new Map<string, { title?: string; description?: string; readOnly?: boolean }>();
 
   for (const entry of catalog.fields) {

@@ -1,4 +1,5 @@
 import type { FieldMetadata } from "./types.js";
+import type { FieldContext, FieldPath } from "./field-context-types.js";
 import {
   resolveJsonSchemaNode,
   resolveJsonSchemaMetadata,
@@ -12,6 +13,7 @@ import { toJsonPointer } from "./path-utils.js";
 export class SchemaCache {
   #nodeCache = new Map<string, Record<string, unknown> | null>();
   #metadataCache = new Map<string, FieldMetadata | undefined>();
+  #contextCache = new Map<string, FieldContext>();
   #jsonSchema: Record<string, unknown>;
 
   constructor(jsonSchema: Record<string, unknown>) {
@@ -35,6 +37,22 @@ export class SchemaCache {
     }
     const result = resolveJsonSchemaMetadata(this.#jsonSchema, path);
     this.#metadataCache.set(key, result);
+    return result;
+  }
+
+  /**
+   * Caches the result of resolveFieldContext() for a given path.
+   * Returns cached result if available, otherwise calls the resolver and caches it.
+   */
+  resolveContext(
+    path: FieldPath,
+    resolver: () => FieldContext,
+  ): FieldContext {
+    const key = toJsonPointer(path);
+    const cached = this.#contextCache.get(key);
+    if (cached) return cached;
+    const result = resolver();
+    this.#contextCache.set(key, result);
     return result;
   }
 }

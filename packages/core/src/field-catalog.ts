@@ -1,8 +1,10 @@
 import type { SchemaDescriptor } from "./types.js";
 import type { FieldPath, FieldTypeInfo } from "./field-context-types.js";
-import { resolveFieldContext } from "./resolve-field-context.js";
 import { resolveJsonSchemaNode } from "./resolve-json-schema-metadata.js";
-import { toJsonPointer } from "./path-utils.js";
+import { toJsonPointer, toInternalPath } from "./path-utils.js";
+import { extractTypeInfo } from "./extract-type-info.js";
+import { resolveFieldMetadata } from "./resolve-field-metadata.js";
+import { isFieldReadOnly } from "./read-only.js";
 
 type JsonSchemaNode = Record<string, unknown>;
 
@@ -202,23 +204,28 @@ function walkNode(
     refKey = ref;
     const count = ctx.refCounts.get(refKey) ?? 0;
     if (count >= ctx.recursionUnrollDepth) {
-      const ctx2 = resolveFieldContext(ctx.descriptor, path);
+      const internalPath = toInternalPath(path);
+      const refNode = resolveJsonSchemaNode(ctx.descriptor.jsonSchema, internalPath);
+      const refTypeInfo = extractTypeInfo(refNode as JsonSchemaNode | null);
+      const refMeta = resolveFieldMetadata(
+        ctx.descriptor.metadata,
+        internalPath,
+        ctx.descriptor.jsonSchema,
+      );
       const entry: FieldCatalogEntry = {
         path,
         pointer: toJsonPointer(path),
-        typeInfo: ctx2.typeInfo,
+        typeInfo: refTypeInfo,
         required,
         recursive: true,
       };
-      if (ctx2.metadata) {
-        if (ctx2.metadata.title) entry.title = ctx2.metadata.title;
-        if (ctx2.metadata.description)
-          entry.description = ctx2.metadata.description;
-        if (ctx2.metadata.examples) entry.examples = ctx2.metadata.examples;
-        if (ctx2.metadata.enumLabels)
-          entry.enumLabels = ctx2.metadata.enumLabels;
+      if (refMeta) {
+        if (refMeta.title) entry.title = refMeta.title;
+        if (refMeta.description) entry.description = refMeta.description;
+        if (refMeta.examples) entry.examples = refMeta.examples;
+        if (refMeta.enumLabels) entry.enumLabels = refMeta.enumLabels;
       }
-      if (ctx2.readOnly) entry.readOnly = true;
+      if (isFieldReadOnly(ctx.descriptor.metadata, path)) entry.readOnly = true;
       return entry;
     }
     ctx.refCounts.set(refKey, (ctx.refCounts.get(refKey) ?? 0) + 1);
@@ -251,13 +258,18 @@ function buildEntry(
   depth: number,
   seen: Set<string>,
 ): FieldCatalogEntry {
-  const fieldCtx = resolveFieldContext(ctx.descriptor, path);
-  const meta = fieldCtx.metadata;
+  const typeInfo = extractTypeInfo(resolved);
+  const internalPath = toInternalPath(path);
+  const meta = resolveFieldMetadata(
+    ctx.descriptor.metadata,
+    internalPath,
+    ctx.descriptor.jsonSchema,
+  );
 
   const entry: FieldCatalogEntry = {
     path,
     pointer: toJsonPointer(path),
-    typeInfo: fieldCtx.typeInfo,
+    typeInfo,
     required,
   };
 
@@ -267,7 +279,7 @@ function buildEntry(
     if (meta.examples) entry.examples = meta.examples;
     if (meta.enumLabels) entry.enumLabels = meta.enumLabels;
   }
-  if (fieldCtx.readOnly) entry.readOnly = true;
+  if (isFieldReadOnly(ctx.descriptor.metadata, path)) entry.readOnly = true;
 
   const cv = getValueAtPath(ctx.currentValue, path);
   if (cv !== undefined) entry.currentValue = cv;
@@ -370,14 +382,9 @@ function buildEntry(
       path: [...path, "*"] as unknown as FieldPath,
       pointer: null,
       pathPattern: wildcardPattern === "/*" ? "/*" : wildcardPattern,
-      typeInfo: resolveFieldContext(ctx.descriptor, path).typeInfo,
+      typeInfo: extractTypeInfo(resolved),
       required: false,
     };
-
-    const addlCtx = resolveFieldContext(ctx.descriptor, [
-      ...path,
-      "__additionalProperties__",
-    ]);
 
     const addlNode = addlProps as JsonSchemaNode;
     if (typeof addlNode.type === "string") {
@@ -453,8 +460,7 @@ function walkItemWildcard(
     return null;
   }
 
-  const fieldCtx = resolveFieldContext(ctx.descriptor, arrayPath);
-  const itemTypeInfo = fieldCtx.typeInfo;
+  const itemTypeInfo = extractTypeInfo(resolved);
 
   const entry: FieldCatalogEntry = {
     path: arrayPath,
