@@ -1,14 +1,12 @@
+import loaderPkg from "@monaco-editor/loader";
 import type { MonacoApi } from "./monaco-types.js";
 import type { RawMonaco } from "./raw-types.js";
 
-interface AmdRequire {
-  config(params: { paths: Record<string, string> }): void;
-  (
-    dependencies: string[],
-    callback: (monaco: MonacoApi) => void,
-    errorback: (err: Error) => void,
-  ): void;
-}
+// @monaco-editor/loader types don't resolve under moduleResolution: "NodeNext"
+const loader = loaderPkg as unknown as {
+  config(params: { paths?: { vs?: string } }): void;
+  init(): Promise<unknown>;
+};
 
 export interface LoadMonacoOptions {
   basePath?: string;
@@ -24,95 +22,58 @@ export interface LoadMonacoOptions {
 }
 
 const MONACO_VERSION = "0.52.2";
-const DEFAULT_CDN = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min`;
 
 let monacoPromise: Promise<MonacoApi> | null = null;
 
 export function loadMonaco(options?: LoadMonacoOptions): Promise<MonacoApi> {
   if (monacoPromise) return monacoPromise;
-
   monacoPromise = doLoad(options);
   return monacoPromise;
 }
 
-function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
-  const basePath = options?.basePath ?? DEFAULT_CDN;
+function setupWorkers(): void {
+  const env = globalThis as unknown as {
+    MonacoEnvironment?: { getWorker?: unknown };
+  };
+  if (env.MonacoEnvironment?.getWorker) return;
 
-  return new Promise<MonacoApi>((resolve, reject) => {
-    const win = globalThis as unknown as {
-      monaco?: MonacoApi;
-      require?: AmdRequire;
-    };
+  (
+    globalThis as unknown as { MonacoEnvironment: unknown }
+  ).MonacoEnvironment = {
+    ...env.MonacoEnvironment,
+    getWorker(_workerId: string, label: string) {
+      const workerFile =
+        label === "json"
+          ? "language/json/json.worker.js"
+          : label === "css"
+            ? "language/css/css.worker.js"
+            : label === "html"
+              ? "language/html/html.worker.js"
+              : label === "typescript" || label === "javascript"
+                ? "language/typescript/ts.worker.js"
+                : "editor/editor.worker.js";
+      const workerUrl = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/esm/vs/${workerFile}`;
+      const workerCode = `import ${JSON.stringify(workerUrl)};`;
+      const blob = new Blob([workerCode], {
+        type: "application/javascript",
+      });
+      return new Worker(URL.createObjectURL(blob), { type: "module" });
+    },
+  };
+}
 
-    const runOnLoad = async (monaco: MonacoApi) => {
-      try {
-        await options?.onLoad?.(monaco as RawMonaco);
-      } catch (err) {
-        reject(err);
-        return;
-      }
-      resolve(monaco);
-    };
+async function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
+  const basePath =
+    options?.basePath ??
+    `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min`;
 
-    const env = globalThis as unknown as {
-      MonacoEnvironment?: { getWorker?: unknown };
-    };
-    if (!env.MonacoEnvironment?.getWorker) {
-      (
-        globalThis as unknown as { MonacoEnvironment: unknown }
-      ).MonacoEnvironment = {
-        ...env.MonacoEnvironment,
-        getWorker(_workerId: string, label: string) {
-          const workerFile =
-            label === "json"
-              ? "language/json/json.worker.js"
-              : label === "css"
-                ? "language/css/css.worker.js"
-                : label === "html"
-                  ? "language/html/html.worker.js"
-                  : label === "typescript" || label === "javascript"
-                    ? "language/typescript/ts.worker.js"
-                    : "editor/editor.worker.js";
-          const workerUrl = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/esm/vs/${workerFile}`;
-          const workerCode = `import ${JSON.stringify(workerUrl)};`;
-          const blob = new Blob([workerCode], {
-            type: "application/javascript",
-          });
-          return new Worker(URL.createObjectURL(blob), { type: "module" });
-        },
-      };
-    }
+  setupWorkers();
 
-    if (win.monaco) {
-      runOnLoad(win.monaco);
-      return;
-    }
+  loader.config({ paths: { vs: `${basePath}/vs` } });
 
-    if (win.require) {
-      win.require.config({ paths: { vs: `${basePath}/vs` } });
-      win.require(
-        ["vs/editor/editor.main"],
-        (monaco: MonacoApi) => runOnLoad(monaco),
-        (err: Error) => reject(err),
-      );
-      return;
-    }
+  const monaco = (await loader.init()) as MonacoApi;
 
-    const script = document.createElement("script");
-    script.src = `${basePath}/vs/loader.js`;
-    script.async = true;
-    script.onerror = () =>
-      reject(new Error(`Failed to load Monaco loader from ${basePath}`));
-    script.onload = () => {
-      const amdRequire = (globalThis as unknown as { require: AmdRequire })
-        .require;
-      amdRequire.config({ paths: { vs: `${basePath}/vs` } });
-      amdRequire(
-        ["vs/editor/editor.main"],
-        (monaco: MonacoApi) => runOnLoad(monaco),
-        (err: Error) => reject(err),
-      );
-    };
-    document.head.appendChild(script);
-  });
+  await options?.onLoad?.(monaco as RawMonaco);
+
+  return monaco;
 }

@@ -1,5 +1,11 @@
 # @zod-monaco/monaco
 
+## 3.3.5
+
+### Patch Changes
+
+- refactor(monaco): replace custom AMD loader with @monaco-editor/loader package
+
 ## 3.3.4
 
 ### Patch Changes

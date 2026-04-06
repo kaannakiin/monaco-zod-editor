@@ -10,7 +10,7 @@ npm install @zod-monaco/monaco @zod-monaco/core zod
 
 ## Monaco Loading
 
-This package loads Monaco editor from CDN (v0.52.2) via AMD. Use `loadMonaco()` to load it:
+This package loads Monaco editor from CDN (v0.52.2) via [`@monaco-editor/loader`](https://www.npmjs.com/package/@monaco-editor/loader). Use `loadMonaco()` to load it:
 
 ```ts
 import { loadMonaco } from "@zod-monaco/monaco";
