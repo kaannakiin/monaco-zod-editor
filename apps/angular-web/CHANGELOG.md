@@ -1,5 +1,13 @@
 # angular-web
 
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies
+  - @zod-monaco/core@3.3.1
+  - @zod-monaco/monaco@3.3.1
+
 ## 2.0.5
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zod-monaco/monaco
 
+## 3.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @zod-monaco/core@3.3.1
+
 ## 3.3.0
 
 ### Minor Changes

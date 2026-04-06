@@ -1,5 +1,15 @@
 # @zod-monaco/core
 
+## 3.3.1
+
+### Patch Changes
+
+- fix: resolve explicit metadata for recursive schema paths at any nesting depth
+
+  Previously, explicit metadata (title, description, emptyStateHint, placeholder) defined for a field like `path: ["Children"]` only matched the root-level `Children` array. Deeper recursive occurrences (`Children[0].Children[0]`) received no explicit metadata because the JSON Pointer lookup required an exact match.
+
+  Added `findRecursiveMatch` fallback in `resolveFieldMetadata`: when an exact pointer match fails, numeric (array index) segments are stripped from the runtime path and each metadata entry is tested as a suffix match. The longest (most specific) match wins. This enables a single metadata definition to apply at every recursion depth without requiring duplicate entries.
+
 ## 3.3.0
 
 ### Minor Changes
