@@ -63,7 +63,17 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
       ).MonacoEnvironment = {
         ...env.MonacoEnvironment,
         getWorker(_workerId: string, label: string) {
-          const workerUrl = `${basePath}/vs/base/worker/workerMain.js`;
+          const workerFile =
+            label === "json"
+              ? "language/json/json.worker.js"
+              : label === "css"
+                ? "language/css/css.worker.js"
+                : label === "html"
+                  ? "language/html/html.worker.js"
+                  : label === "typescript" || label === "javascript"
+                    ? "language/typescript/ts.worker.js"
+                    : "editor/editor.worker.js";
+          const workerUrl = `${basePath}/vs/${workerFile}`;
           const workerCode =
             "fetch('" +
             workerUrl +
@@ -76,7 +86,7 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
             "URL.revokeObjectURL(u);" +
             "})" +
             ".catch(function(e){console.error('[zod-monaco] Worker load failed:',e);});";
-          var blob = new Blob([workerCode], { type: "application/javascript" });
+          const blob = new Blob([workerCode], { type: "application/javascript" });
           return new Worker(URL.createObjectURL(blob));
         },
       };
