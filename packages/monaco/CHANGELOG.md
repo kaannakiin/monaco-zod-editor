@@ -1,5 +1,16 @@
 # @zod-monaco/monaco
 
+## 3.3.3
+
+### Patch Changes
+
+- fix: resolve worker URL from blob context by using label-specific worker files
+
+  `getWorker` was fetching `workerMain.js` (the AMD bootstrap) inside a blob worker. The AMD loader then tried to resolve language-specific workers via relative paths, which fail from a blob URL origin (`blob:http://...`). Now `getWorker` fetches the label-specific worker file directly (e.g. `json.worker.js`, `editor.worker.js`) with an absolute URL, avoiding relative path resolution entirely.
+
+- Updated dependencies
+  - @zod-monaco/core@3.3.3
+
 ## 3.3.2
 
 ### Patch Changes

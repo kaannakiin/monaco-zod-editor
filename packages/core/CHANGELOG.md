@@ -1,5 +1,11 @@
 # @zod-monaco/core
 
+## 3.3.3
+
+### Patch Changes
+
+- Version alignment with @zod-monaco/monaco@3.3.3. No runtime changes in core.
+
 ## 3.3.2
 
 ### Patch Changes
