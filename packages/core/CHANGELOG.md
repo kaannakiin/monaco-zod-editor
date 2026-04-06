@@ -1,5 +1,11 @@
 # @zod-monaco/core
 
+## 3.3.4
+
+### Patch Changes
+
+- changed-worker-url
+
 ## 3.3.3
 
 ### Patch Changes
@@ -13,7 +19,6 @@
 - perf: eliminate redundant schema traversals in field catalog, memoize field context, index metadata lookups
 
   Large/complex Zod schemas (deeply recursive, wide unions) caused editor freezes due to combinatorial schema traversal during catalog building and cursor tracking.
-
   - **Catalog walk optimization:** `buildFieldCatalog()` no longer calls `resolveFieldContext()` per node. Type info is extracted directly from the already-resolved schema node, eliminating ~4x redundant traversals per field.
   - **FieldContext memoization:** `SchemaCache` now caches `resolveFieldContext()` results. Hover, completions, and breadcrumb enrichment get O(1) lookups on repeat access.
   - **Metadata suffix index:** `findRecursiveMatch()` uses a pre-computed index keyed by last path segment instead of O(N) linear scan over all metadata entries.
