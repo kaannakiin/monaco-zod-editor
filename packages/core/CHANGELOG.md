@@ -1,5 +1,22 @@
 # @zod-monaco/core
 
+## 3.3.2
+
+### Patch Changes
+
+- perf: eliminate redundant schema traversals in field catalog, memoize field context, index metadata lookups
+
+  Large/complex Zod schemas (deeply recursive, wide unions) caused editor freezes due to combinatorial schema traversal during catalog building and cursor tracking.
+
+  - **Catalog walk optimization:** `buildFieldCatalog()` no longer calls `resolveFieldContext()` per node. Type info is extracted directly from the already-resolved schema node, eliminating ~4x redundant traversals per field.
+  - **FieldContext memoization:** `SchemaCache` now caches `resolveFieldContext()` results. Hover, completions, and breadcrumb enrichment get O(1) lookups on repeat access.
+  - **Metadata suffix index:** `findRecursiveMatch()` uses a pre-computed index keyed by last path segment instead of O(N) linear scan over all metadata entries.
+  - **Breadcrumb cache depth:** Reduced from 15 to 8, cutting catalog size exponentially for recursive schemas while deeper paths fall through to the memoized resolver.
+  - **Cursor debounce:** Breadcrumb updates are debounced at 50ms, preventing `resolvePathAtOffset()` + `buildBreadcrumbSegments()` on every cursor pixel movement.
+  - **Enum validation depth limit:** `collectEnumViolations()` now caps recursion at depth 50, preventing O(N^depth) explosion on deeply nested arrays.
+  - **Incremental LineIndex:** Single-character edits patch the line offset array in O(log n) instead of rebuilding from scratch in O(n).
+  - **Shared extractTypeInfo module:** `extractTypeInfo()`, `mergeAllOfBranches()`, and `resolveRawSchemaNode()` extracted to a shared module for reuse by both `resolveFieldContext` and `buildFieldCatalog`.
+
 ## 3.3.1
 
 ### Patch Changes

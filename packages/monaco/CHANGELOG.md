@@ -1,5 +1,18 @@
 # @zod-monaco/monaco
 
+## 3.3.2
+
+### Patch Changes
+
+- perf: debounce cursor breadcrumb updates, incremental LineIndex, reduced catalog depth
+
+  - **Cursor debounce:** `onDidChangeCursorPosition` handler debounced at 50ms to prevent per-pixel breadcrumb rebuilds.
+  - **Incremental LineIndex:** Single-edit content changes patch the existing line offset array via `LineIndex.applyEdit()` in O(log n) instead of full O(n) rebuild.
+  - **Breadcrumb cache depth:** `buildBreadcrumbLabelCache()` reduced from `maxDepth: 15` to `maxDepth: 8`, cutting catalog size for recursive schemas while deeper paths fall through to the memoized `resolveFieldContext`.
+
+- Updated dependencies
+  - @zod-monaco/core@3.3.2
+
 ## 3.3.1
 
 ### Patch Changes
