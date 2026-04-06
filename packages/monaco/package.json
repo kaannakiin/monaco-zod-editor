@@ -6,12 +6,25 @@
   "author": "Kaan Akin",
   "type": "module",
   "sideEffects": false,
+  "homepage": "https://github.com/kaannakiin/zod-monaco#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaannakiin/zod-monaco.git",
+    "directory": "packages/monaco"
+  },
   "keywords": [
     "monaco",
+    "monaco-editor",
     "editor",
     "json",
+    "json-editor",
     "zod",
-    "validation"
+    "zod-v4",
+    "validation",
+    "schema",
+    "typescript",
+    "intellisense",
+    "autocomplete"
   ],
   "files": [
     "dist"

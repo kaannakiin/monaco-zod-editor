@@ -73,21 +73,12 @@ function doLoad(options?: LoadMonacoOptions): Promise<MonacoApi> {
                   : label === "typescript" || label === "javascript"
                     ? "language/typescript/ts.worker.js"
                     : "editor/editor.worker.js";
-          const workerUrl = `${basePath}/vs/${workerFile}`;
-          const workerCode =
-            "fetch('" +
-            workerUrl +
-            "')" +
-            ".then(function(r){return r.text();})" +
-            ".then(function(text){" +
-            "var b=new Blob([text],{type:'application/javascript'});" +
-            "var u=URL.createObjectURL(b);" +
-            "importScripts(u);" +
-            "URL.revokeObjectURL(u);" +
-            "})" +
-            ".catch(function(e){console.error('[zod-monaco] Worker load failed:',e);});";
-          const blob = new Blob([workerCode], { type: "application/javascript" });
-          return new Worker(URL.createObjectURL(blob));
+          const workerUrl = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/esm/vs/${workerFile}`;
+          const workerCode = `import ${JSON.stringify(workerUrl)};`;
+          const blob = new Blob([workerCode], {
+            type: "application/javascript",
+          });
+          return new Worker(URL.createObjectURL(blob), { type: "module" });
         },
       };
     }
