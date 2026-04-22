@@ -21,6 +21,7 @@ class DefaultSchemaRegistry implements ZodSchemaRegistry {
   readonly #monaco: MonacoApi;
   readonly #entries = new Map<string, SchemaEntry>();
   #baseOptions: MonacoJsonDiagnosticsOptions = {};
+  #flushScheduled = false;
 
   constructor(monaco: MonacoApi) {
     this.#monaco = monaco;
@@ -28,12 +29,12 @@ class DefaultSchemaRegistry implements ZodSchemaRegistry {
 
   setBaseOptions(options: MonacoJsonDiagnosticsOptions): void {
     this.#baseOptions = options;
-    this.#flush();
+    this.#scheduleFlush();
   }
 
   register(entry: SchemaEntry): SchemaRegistration {
     this.#entries.set(entry.uri, entry);
-    this.#flush();
+    this.#scheduleFlush();
 
     let disposed = false;
 
@@ -45,7 +46,7 @@ class DefaultSchemaRegistry implements ZodSchemaRegistry {
         }
         entry = updated;
         this.#entries.set(entry.uri, entry);
-        this.#flush();
+        this.#scheduleFlush();
       },
       dispose: () => {
         if (disposed) return;
@@ -60,6 +61,15 @@ class DefaultSchemaRegistry implements ZodSchemaRegistry {
     this.#entries.clear();
     this.#flush();
     registries.delete(this.#monaco);
+  }
+
+  #scheduleFlush(): void {
+    if (this.#flushScheduled) return;
+    this.#flushScheduled = true;
+    queueMicrotask(() => {
+      this.#flushScheduled = false;
+      this.#flush();
+    });
   }
 
   #flush(): void {

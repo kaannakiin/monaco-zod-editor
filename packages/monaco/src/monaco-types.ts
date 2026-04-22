@@ -10,6 +10,7 @@ export interface MonacoPosition {
 export interface MonacoModelLike {
   readonly uri: { scheme: string; path: string; toString(): string };
   getValue(): string;
+  getOffsetAt(position: MonacoPosition): number;
   getPositionAt(offset: number): MonacoPosition;
   getVersionId(): number;
   getFullModelRange(): MonacoRange;

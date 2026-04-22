@@ -15,13 +15,23 @@ import type {
   MonacoCompletionList,
   MonacoCompletionItem,
 } from "./monaco-types.js";
-import {
-  positionToOffset,
-  getValueContext,
-  makePosition,
-} from "./json-path-position.js";
-import type { LineIndex } from "./json-path-position.js";
+import { getValueContext } from "./json-path-position.js";
 import type { WorkerBridge } from "./worker-bridge.js";
+
+function offsetRangeToMonacoRange(
+  model: MonacoModelLike,
+  start: number,
+  end: number,
+): { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number } {
+  const s = model.getPositionAt(start);
+  const e = model.getPositionAt(end);
+  return {
+    startLineNumber: s.lineNumber,
+    startColumn: s.column,
+    endLineNumber: e.lineNumber,
+    endColumn: e.column,
+  };
+}
 
 export interface ZodCompletionProvider {
   triggerCharacters?: string[];
@@ -74,18 +84,17 @@ export function createZodCompletionProvider(
   descriptor: SchemaDescriptor,
   modelUri: string,
   cache?: SchemaCache,
-  getLineIndex?: () => LineIndex | null,
   refinements?: readonly SuggestionRefinement[],
   workerBridge?: WorkerBridge,
 ): ZodCompletionProvider {
   const triggerCharacters = deriveTriggerCharacters(refinements);
 
   function buildItems(
+    model: MonacoModelLike,
     text: string,
     offset: number,
     ctx: NonNullable<ReturnType<typeof getValueContext>>,
     fieldPath: FieldPath,
-    idx: LineIndex | undefined,
     branchEnums?: unknown[],
   ): MonacoCompletionItem[] {
     const fieldCtx = resolveFieldContext(descriptor, fieldPath, cache);
@@ -112,7 +121,7 @@ export function createZodCompletionProvider(
             detail,
             insertText: val,
             sortText: String(i).padStart(4, "0"),
-            range: makePosition(text, ctx.innerStart, ctx.innerEnd, idx),
+            range: offsetRangeToMonacoRange(model, ctx.innerStart, ctx.innerEnd),
           });
         } else {
           items.push({
@@ -121,7 +130,7 @@ export function createZodCompletionProvider(
             detail,
             insertText: JSON.stringify(val),
             sortText: String(i).padStart(4, "0"),
-            range: makePosition(text, ctx.valueStart, ctx.valueEnd, idx),
+            range: offsetRangeToMonacoRange(model, ctx.valueStart, ctx.valueEnd),
           });
         }
       }
@@ -139,8 +148,8 @@ export function createZodCompletionProvider(
         }
 
         const range = ctx.insideString
-          ? makePosition(text, ctx.innerStart, ctx.innerEnd, idx)
-          : makePosition(text, ctx.valueStart, ctx.valueEnd, idx);
+          ? offsetRangeToMonacoRange(model, ctx.innerStart, ctx.innerEnd)
+          : offsetRangeToMonacoRange(model, ctx.valueStart, ctx.valueEnd);
 
         for (let i = 0; i < ref.suggestions.length; i++) {
           const suggestion = ref.suggestions[i]!;
@@ -171,13 +180,7 @@ export function createZodCompletionProvider(
       }
 
       const text = model.getValue();
-      const idx = getLineIndex?.() ?? undefined;
-      const offset = positionToOffset(
-        text,
-        position.lineNumber,
-        position.column,
-        idx,
-      );
+      const offset = model.getOffsetAt(position);
       const ctx = getValueContext(text, offset);
 
       if (!ctx) {
@@ -190,7 +193,7 @@ export function createZodCompletionProvider(
         items.length > 0 ? { suggestions: items } : null;
 
       if (!workerBridge?.isAvailable()) {
-        return toResult(buildItems(text, offset, ctx, fieldPath, idx));
+        return toResult(buildItems(model, text, offset, ctx, fieldPath));
       }
 
       return workerBridge.getMatchingSchemas(model).then(
@@ -199,9 +202,9 @@ export function createZodCompletionProvider(
             (s) => s.node.offset <= offset && offset < s.node.offset + s.node.length,
           );
           const branchEnum = matchAtOffset?.schema.enum as unknown[] | undefined;
-          return toResult(buildItems(text, offset, ctx, fieldPath, idx, branchEnum));
+          return toResult(buildItems(model, text, offset, ctx, fieldPath, branchEnum));
         },
-        () => toResult(buildItems(text, offset, ctx, fieldPath, idx)),
+        () => toResult(buildItems(model, text, offset, ctx, fieldPath)),
       );
     },
   };

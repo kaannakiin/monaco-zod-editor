@@ -1,4 +1,3 @@
-import { LineIndex } from "../src/json-path-position.js";
 import type {
   MonacoApi,
   MonacoCompletionContext,
@@ -91,9 +90,27 @@ export function createMockModel(
   let versionId = 1;
 
   function positionAt(offset: number) {
-    const index = new LineIndex(text);
-    const { line, col } = index.offsetToPosition(Math.min(offset, text.length));
-    return { lineNumber: line, column: col };
+    const clamped = Math.max(0, Math.min(offset, text.length));
+    let line = 1;
+    let lineStart = 0;
+    for (let i = 0; i < clamped; i++) {
+      if (text.charCodeAt(i) === 10) {
+        line++;
+        lineStart = i + 1;
+      }
+    }
+    return { lineNumber: line, column: clamped - lineStart + 1 };
+  }
+
+  function offsetAt(position: MonacoPosition): number {
+    let line = 1;
+    for (let i = 0; i <= text.length; i++) {
+      if (line === position.lineNumber) {
+        return Math.min(i + position.column - 1, text.length);
+      }
+      if (text.charCodeAt(i) === 10) line++;
+    }
+    return text.length;
   }
 
   return {
@@ -104,10 +121,16 @@ export function createMockModel(
     },
     getValue: () => text,
     getPositionAt: (offset) => positionAt(offset),
+    getOffsetAt: (position) => offsetAt(position),
     getVersionId: () => versionId,
     getFullModelRange: () => {
-      const index = new LineIndex(text);
-      return index.makePosition(0, text.length);
+      const end = positionAt(text.length);
+      return {
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: end.lineNumber,
+        endColumn: end.column,
+      };
     },
     dispose() {},
     setValue(value: string) {

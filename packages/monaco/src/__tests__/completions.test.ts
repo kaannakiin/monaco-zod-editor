@@ -52,7 +52,6 @@ describe("createZodCompletionProvider — suggestion refinements", () => {
       descriptor,
       MODEL_URI,
       undefined,
-      undefined,
       refinements,
     );
 
@@ -78,7 +77,6 @@ describe("createZodCompletionProvider — suggestion refinements", () => {
     const provider = createZodCompletionProvider(
       descriptor,
       MODEL_URI,
-      undefined,
       undefined,
       refinements,
     );
@@ -109,7 +107,6 @@ describe("createZodCompletionProvider — suggestion refinements", () => {
       descriptor,
       MODEL_URI,
       undefined,
-      undefined,
       refinements,
     );
 
@@ -136,7 +133,6 @@ describe("createZodCompletionProvider — suggestion refinements", () => {
       descriptor,
       MODEL_URI,
       undefined,
-      undefined,
       refinements,
     );
 
@@ -157,7 +153,6 @@ describe("createZodCompletionProvider — suggestion refinements", () => {
     const provider = createZodCompletionProvider(
       descriptor,
       MODEL_URI,
-      undefined,
       undefined,
       refinements,
     );
@@ -183,7 +178,6 @@ describe("createZodCompletionProvider — suggestion refinements", () => {
       descriptor,
       MODEL_URI,
       undefined,
-      undefined,
       refinements,
     );
 
@@ -205,7 +199,6 @@ describe("triggerCharacters derivation", () => {
       descriptor,
       MODEL_URI,
       undefined,
-      undefined,
       refinements,
     );
     expect(provider.triggerCharacters).toEqual(["{"]);
@@ -221,7 +214,6 @@ describe("triggerCharacters derivation", () => {
       descriptor,
       MODEL_URI,
       undefined,
-      undefined,
       refinements,
     );
     expect(provider.triggerCharacters).toEqual(["@"]);
@@ -236,7 +228,6 @@ describe("triggerCharacters derivation", () => {
     const provider = createZodCompletionProvider(
       descriptor,
       MODEL_URI,
-      undefined,
       undefined,
       refinements,
     );

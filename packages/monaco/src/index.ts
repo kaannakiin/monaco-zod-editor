@@ -15,14 +15,12 @@ import type { ZodEditorAttachment } from "./attach.js";
 export type { FeatureToggles } from "./types.js";
 export type { ZodMonacoLocale } from "./locale.js";
 export { locales, defaultLocale } from "./locale.js";
-export type { JsonPosition, ValueContext, PathSegment } from "./json-path-position.js";
+export type { OffsetRange, ValueContext, PathSegment } from "./json-path-position.js";
 export {
   resolveJsonPath,
   resolvePathAtOffset,
   collectPathsInRange,
   getValueContext,
-  positionToOffset,
-  LineIndex,
 } from "./json-path-position.js";
 export { buildBreadcrumbSegments, buildBreadcrumbLabelCache } from "./breadcrumb.js";
 export type { BreadcrumbSegment, BreadcrumbLabelCache } from "./breadcrumb.js";
@@ -272,31 +270,25 @@ class DefaultZodEditorController implements ZodEditorController {
   }
 
   revealIssue(issue: ZodIssue): void {
-    const editor = this.#editor;
-    if (!editor) return;
-    const text = editor.getValue();
-    const position = resolveJsonPath(text, issue.path);
-    if (position) {
-      setTimeout(() => {
-        editor.focus();
-        editor.setPosition({ lineNumber: position.startLineNumber, column: position.startColumn });
-        editor.revealLineInCenter(position.startLineNumber);
-      }, 0);
-    }
+    this.revealPath(issue.path);
   }
 
   revealPath(path: PropertyKey[]): void {
     const editor = this.#editor;
     if (!editor) return;
-    const text = editor.getValue();
-    const position = resolveJsonPath(text, path);
-    if (position) {
-      setTimeout(() => {
-        editor.focus();
-        editor.setPosition({ lineNumber: position.startLineNumber, column: position.startColumn });
-        editor.revealLineInCenter(position.startLineNumber);
-      }, 0);
-    }
+    const model = editor.getModel();
+    if (!model) return;
+    const range = resolveJsonPath(model.getValue(), path);
+    if (!range) return;
+    const startPos = model.getPositionAt(range.start);
+    setTimeout(() => {
+      editor.focus();
+      editor.setPosition({
+        lineNumber: startPos.lineNumber,
+        column: startPos.column,
+      });
+      editor.revealLineInCenter(startPos.lineNumber);
+    }, 0);
   }
 
   format(): boolean {

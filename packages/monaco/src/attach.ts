@@ -22,10 +22,8 @@ import type {
 import type { BreadcrumbSegment } from "./breadcrumb.js";
 import {
   resolveJsonPath,
-  positionToOffset,
   resolvePathAtOffset,
   collectPathsInRange,
-  LineIndex,
 } from "./json-path-position.js";
 import { createZodHoverProvider } from "./hover.js";
 import { createZodCompletionProvider } from "./completions.js";
@@ -33,7 +31,7 @@ import { buildBreadcrumbSegments, buildBreadcrumbLabelCache } from "./breadcrumb
 import type { BreadcrumbLabelCache } from "./breadcrumb.js";
 import { getSchemaRegistry } from "./schema-registry.js";
 import type { SchemaRegistration } from "./schema-registry.js";
-import { createWorkerBridge } from "./worker-bridge.js";
+import { createWorkerBridge, findNodeByPath } from "./worker-bridge.js";
 import type { WorkerBridge } from "./worker-bridge.js";
 
 const DEFAULT_EDITOR_LANGUAGE = "json";
@@ -85,7 +83,6 @@ export function attachZodToEditor(
   let schemaCache: SchemaCache | null = descriptor
     ? new SchemaCache(descriptor.jsonSchema)
     : null;
-  let lineIndex: LineIndex | null = null;
   let hoverDisposable: MonacoDisposable | null = null;
   let completionDisposable: MonacoDisposable | null = null;
   let schemaRegistration: SchemaRegistration | null = null;
@@ -98,13 +95,6 @@ export function attachZodToEditor(
   let breadcrumbLabelCache: BreadcrumbLabelCache | null = descriptor
     ? buildBreadcrumbLabelCache(descriptor)
     : null;
-
-  function getLineIndex(): LineIndex {
-    if (!lineIndex) {
-      lineIndex = new LineIndex(editor.getValue());
-    }
-    return lineIndex;
-  }
 
   const validationListeners = new Set<(result: ValidationResult) => void>();
   const cursorPathListeners = new Set<
@@ -155,7 +145,6 @@ export function attachZodToEditor(
         model.uri.toString(),
         locale,
         schemaCache ?? undefined,
-        () => lineIndex,
         workerBridge,
       ),
     );
@@ -176,7 +165,6 @@ export function attachZodToEditor(
         descriptor,
         model.uri.toString(),
         schemaCache ?? undefined,
-        () => lineIndex,
         refinements.length > 0 ? refinements : undefined,
         workerBridge,
       ),
@@ -243,7 +231,6 @@ export function attachZodToEditor(
       return;
     }
 
-    const validationIndex = getLineIndex();
     const issues = result.error.issues;
 
     const applyMarkers = (markers: MonacoMarkerData[]) => {
@@ -252,48 +239,55 @@ export function attachZodToEditor(
       for (const l of validationListeners) l(vResult);
     };
 
-    if (workerBridge?.isAvailable()) {
-      workerBridge.getDocument(model).then(
-        (doc) => {
-          const markers = issues
-            .map((issue) => {
-              if (doc?.root && issue.path.length > 0) {
-                const syncPos = resolveJsonPath(text, issue.path, validationIndex);
-                if (syncPos) {
-                  return {
-                    severity: monaco.MarkerSeverity.Error,
-                    message: issue.message,
-                    ...syncPos,
-                    source: MARKER_OWNER,
-                  } satisfies MonacoMarkerData;
-                }
-              }
-              return issueToMarker(text, issue, validationIndex);
-            })
-            .filter((m): m is MonacoMarkerData => m !== null);
-          applyMarkers(markers);
-        },
-        () => {
-          const markers = issues
-            .map((issue) => issueToMarker(text, issue, validationIndex))
-            .filter((m): m is MonacoMarkerData => m !== null);
-          applyMarkers(markers);
-        },
-      );
-    } else {
-      const markers = issues
-        .map((issue) => issueToMarker(text, issue, validationIndex))
+    const buildFallbackMarkers = () =>
+      issues
+        .map((issue) => issueToMarker(model, text, issue))
         .filter((m): m is MonacoMarkerData => m !== null);
-      applyMarkers(markers);
+
+    if (!workerBridge?.isAvailable()) {
+      applyMarkers(buildFallbackMarkers());
+      return;
     }
+
+    workerBridge.getDocument(model).then(
+      (doc) => {
+        if (!doc?.root) {
+          applyMarkers(buildFallbackMarkers());
+          return;
+        }
+        const markers = issues
+          .map((issue) => {
+            if (issue.path.length > 0) {
+              const node = findNodeByPath(doc, issue.path);
+              if (node) {
+                const startPos = model.getPositionAt(node.offset);
+                const endPos = model.getPositionAt(node.offset + node.length);
+                return {
+                  severity: monaco.MarkerSeverity.Error,
+                  message: issue.message,
+                  startLineNumber: startPos.lineNumber,
+                  startColumn: startPos.column,
+                  endLineNumber: endPos.lineNumber,
+                  endColumn: endPos.column,
+                  source: MARKER_OWNER,
+                } satisfies MonacoMarkerData;
+              }
+            }
+            return issueToMarker(model, text, issue);
+          })
+          .filter((m): m is MonacoMarkerData => m !== null);
+        applyMarkers(markers);
+      },
+      () => applyMarkers(buildFallbackMarkers()),
+    );
   }
 
   function issueToMarker(
+    model: NonNullable<ReturnType<typeof editor.getModel>>,
     text: string,
     issue: ZodIssue,
-    idx?: LineIndex,
   ): MonacoMarkerData | null {
-    const position = resolveJsonPath(text, issue.path, idx);
+    const position = resolveJsonPath(text, issue.path);
 
     if (!position) {
       return {
@@ -310,10 +304,15 @@ export function attachZodToEditor(
       };
     }
 
+    const startPos = model.getPositionAt(position.start);
+    const endPos = model.getPositionAt(position.end);
     return {
       severity: monaco.MarkerSeverity.Error,
       message: issue.message,
-      ...position,
+      startLineNumber: startPos.lineNumber,
+      startColumn: startPos.column,
+      endLineNumber: endPos.lineNumber,
+      endColumn: endPos.column,
       source: MARKER_OWNER,
     };
   }
@@ -325,14 +324,10 @@ export function attachZodToEditor(
     if (cursorPathListeners.size === 0) return;
     if (cursorTimeout) clearTimeout(cursorTimeout);
     cursorTimeout = setTimeout(() => {
-      const text = editor.getValue();
-      const idx = getLineIndex();
-      const offset = positionToOffset(
-        text,
-        event.position.lineNumber,
-        event.position.column,
-        idx,
-      );
+      const model = editor.getModel();
+      if (!model) return;
+      const text = model.getValue();
+      const offset = model.getOffsetAt(event.position);
       const result = resolvePathAtOffset(text, offset);
       const segments = buildBreadcrumbSegments(result?.path ?? [], descriptor, schemaCache, breadcrumbLabelCache);
       for (const listener of cursorPathListeners) {
@@ -448,33 +443,9 @@ export function attachZodToEditor(
   }
 
   const changeDisposable = editor.onDidChangeModelContent((event) => {
-    // Incrementally update LineIndex instead of full rebuild
-    const changes = event.changes as
-      | ReadonlyArray<{ rangeOffset: number; rangeLength: number; text?: string }>
-      | undefined;
-    if (lineIndex && changes?.length === 1) {
-      const c = changes[0]!;
-      lineIndex.applyEdit(c.rangeOffset, c.rangeLength, c.text ?? "");
-    } else {
-      lineIndex = null;
-    }
     guardReadOnlyEdit(event);
     scheduleValidation();
   });
-
-  if (features.hover || features.completions) {
-    monaco.languages.json.jsonDefaults.setModeConfiguration?.({
-      hovers: !features.hover,
-      completionItems: !features.completions,
-      documentFormattingEdits: true,
-      documentSymbols: true,
-      foldingRanges: true,
-      diagnostics: true,
-      selectionRanges: true,
-      tokens: true,
-      colors: true,
-    });
-  }
 
   applyJsonSchema();
   registerHoverProvider();

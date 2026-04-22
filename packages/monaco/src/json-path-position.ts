@@ -1,117 +1,39 @@
-export interface JsonPosition {
-  startLineNumber: number;
-  startColumn: number;
-  endLineNumber: number;
-  endColumn: number;
+/** Path segment: string for object keys, number for array indices */
+export type PathSegment = string | number;
+
+/** Offset range within the source text (end is exclusive). */
+export interface OffsetRange {
+  start: number;
+  end: number;
 }
 
-/**
- * Pre-computed line offset index for O(1) positionToOffset
- * and O(log n) offsetToPosition / makePosition.
- */
-export class LineIndex {
-  #offsets: number[];
-
-  constructor(text: string) {
-    this.#offsets = [0];
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === "\n") {
-        this.#offsets.push(i + 1);
-      }
-    }
-  }
-
-  positionToOffset(lineNumber: number, column: number): number {
-    const idx = lineNumber - 1;
-    if (idx < 0 || idx >= this.#offsets.length) return -1;
-    return this.#offsets[idx]! + column - 1;
-  }
-
-  offsetToPosition(offset: number): { line: number; col: number } {
-    let lo = 0;
-    let hi = this.#offsets.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (this.#offsets[mid]! <= offset) lo = mid;
-      else hi = mid - 1;
-    }
-    return { line: lo + 1, col: offset - this.#offsets[lo]! + 1 };
-  }
-
-  makePosition(start: number, end: number): JsonPosition {
-    const s = this.offsetToPosition(start);
-    const e = this.offsetToPosition(end);
-    return {
-      startLineNumber: s.line,
-      startColumn: s.col,
-      endLineNumber: e.line,
-      endColumn: e.col,
-    };
-  }
-
-  /**
-   * Incrementally updates the line offset index after a single edit.
-   * O(log n + affected lines) instead of O(n) full rebuild.
-   *
-   * @param offset - byte offset where the edit starts
-   * @param deleteCount - number of bytes deleted
-   * @param insertedText - the text that was inserted at offset
-   */
-  applyEdit(offset: number, deleteCount: number, insertedText: string): void {
-    // Find the line containing the edit start
-    let lo = 0;
-    let hi = this.#offsets.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (this.#offsets[mid]! <= offset) lo = mid;
-      else hi = mid - 1;
-    }
-    const startLineIdx = lo;
-
-    // Find lines within the deleted range
-    const deleteEnd = offset + deleteCount;
-    let endLineIdx = startLineIdx;
-    while (endLineIdx + 1 < this.#offsets.length && this.#offsets[endLineIdx + 1]! <= deleteEnd) {
-      endLineIdx++;
-    }
-
-    // Count newlines in inserted text and record their offsets
-    const newLineOffsets: number[] = [];
-    for (let i = 0; i < insertedText.length; i++) {
-      if (insertedText[i] === "\n") {
-        newLineOffsets.push(offset + i + 1);
-      }
-    }
-
-    // Number of lines removed between startLineIdx and endLineIdx
-    const linesRemoved = endLineIdx - startLineIdx;
-    const linesAdded = newLineOffsets.length;
-    const delta = insertedText.length - deleteCount;
-
-    // Splice: remove old line entries, insert new ones
-    this.#offsets.splice(startLineIdx + 1, linesRemoved, ...newLineOffsets);
-
-    // Shift all subsequent line offsets by the net change in bytes
-    const shiftStart = startLineIdx + 1 + linesAdded;
-    for (let i = shiftStart; i < this.#offsets.length; i++) {
-      this.#offsets[i] = this.#offsets[i]! + delta;
-    }
-  }
+export interface ValueContext {
+  path: PathSegment[];
+  /** Offset range of the key (including quotes). */
+  keyStart: number;
+  keyEnd: number;
+  /** Offset range of the complete value (including quotes for strings). */
+  valueStart: number;
+  valueEnd: number;
+  /** Whether cursor is inside a string literal (between quotes). */
+  insideString: boolean;
+  /** Offset of first char after opening quote (if inside string). */
+  innerStart: number;
+  /** Offset of closing quote (if inside string). */
+  innerEnd: number;
 }
 
 /**
  * Resolves a ZodIssue path (e.g. ["address", "street"] or ["items", 0])
- * to line/column positions within a JSON string.
- *
- * Returns null if the path cannot be resolved.
+ * to an offset range within a JSON string. Returns null if the path cannot
+ * be resolved.
  */
 export function resolveJsonPath(
   text: string,
   path: PropertyKey[],
-  index?: LineIndex,
-): JsonPosition | null {
+): OffsetRange | null {
   if (path.length === 0) {
-    return makePosition(text, 0, text.length, index);
+    return { start: 0, end: text.length };
   }
 
   let offset = 0;
@@ -130,8 +52,8 @@ export function resolveJsonPath(
     }
   }
 
-  const valueEnd = findValueEnd(text, offset);
-  return makePosition(text, offset, valueEnd, index);
+  const valueEnd = skipValue(text, offset);
+  return { start: offset, end: valueEnd };
 }
 
 function skipWhitespace(text: string, pos: number): number {
@@ -351,64 +273,10 @@ function parseStringLiteral(
   return null;
 }
 
-function findValueEnd(text: string, pos: number): number {
-  return skipValue(text, pos);
-}
-
-export function positionToOffset(
-  text: string,
-  lineNumber: number,
-  column: number,
-  index?: LineIndex,
-): number {
-  if (index) {
-    const result = index.positionToOffset(lineNumber, column);
-    return result >= 0 ? result : text.length;
-  }
-
-  let line = 1;
-  let col = 1;
-
-  for (let i = 0; i < text.length; i++) {
-    if (line === lineNumber && col === column) {
-      return i;
-    }
-    if (text[i] === "\n") {
-      line++;
-      col = 1;
-    } else {
-      col++;
-    }
-  }
-
-  if (line === lineNumber && col === column) {
-    return text.length;
-  }
-
-  return text.length;
-}
-
-/** Path segment: string for object keys, number for array indices */
-export type PathSegment = string | number;
-
-export interface ValueContext {
-  path: PathSegment[];
-  keyRange: JsonPosition;
-  /** Offset range of the complete value (including quotes for strings) */
-  valueStart: number;
-  valueEnd: number;
-  /** Whether cursor is inside a string literal (between quotes) */
-  insideString: boolean;
-  /** Offset of first char after opening quote (if inside string) */
-  innerStart: number;
-  /** Offset of closing quote (if inside string) */
-  innerEnd: number;
-}
-
 export function resolvePathAtOffset(
   text: string,
   offset: number,
-): { path: PathSegment[]; keyRange: JsonPosition } | null {
+): { path: PathSegment[]; keyStart: number; keyEnd: number } | null {
   return resolvePathInValue(text, 0, offset, []);
 }
 
@@ -527,10 +395,8 @@ function collectInArray(
 }
 
 /**
- * Collects all JSON field paths whose byte range overlaps [rangeOffset, rangeOffset + rangeLength).
- *
- * Use for multi-byte change ranges to find every field touched by the edit.
- * For zero-length ranges (pure insertions) use resolvePathAtOffset instead.
+ * Collects all JSON field paths whose byte range overlaps
+ * [rangeOffset, rangeOffset + rangeLength).
  */
 export function collectPathsInRange(
   text: string,
@@ -617,7 +483,8 @@ function getValueContextInObject(
       const insideString = text[valueStart] === '"';
       return {
         path: childPath,
-        keyRange: makePosition(text, keyStart, keyEnd),
+        keyStart,
+        keyEnd,
         valueStart,
         valueEnd,
         insideString,
@@ -666,7 +533,8 @@ function getValueContextInArray(
       const insideString = text[valueStart] === '"';
       return {
         path: childPath,
-        keyRange: makePosition(text, valueStart, valueEnd),
+        keyStart: valueStart,
+        keyEnd: valueEnd,
         valueStart,
         valueEnd,
         insideString,
@@ -689,7 +557,7 @@ function resolvePathInValue(
   pos: number,
   target: number,
   path: PathSegment[],
-): { path: PathSegment[]; keyRange: JsonPosition } | null {
+): { path: PathSegment[]; keyStart: number; keyEnd: number } | null {
   pos = skipWhitespace(text, pos);
   const ch = text[pos];
 
@@ -709,12 +577,12 @@ function resolvePathInObject(
   pos: number,
   target: number,
   path: PathSegment[],
-): { path: PathSegment[]; keyRange: JsonPosition } | null {
+): { path: PathSegment[]; keyStart: number; keyEnd: number } | null {
   if (text[pos] !== "{") return null;
   const objectStart = pos;
   pos++;
 
-  let lastResult: { path: PathSegment[]; keyRange: JsonPosition } | null = null;
+  let lastResult: { path: PathSegment[]; keyStart: number; keyEnd: number } | null = null;
 
   while (pos < text.length) {
     pos = skipWhitespace(text, pos);
@@ -745,7 +613,8 @@ function resolvePathInObject(
     if (target >= keyStart && target < keyEnd) {
       return {
         path: [...path, parsedKey.value],
-        keyRange: makePosition(text, keyStart, keyEnd),
+        keyStart,
+        keyEnd,
       };
     }
 
@@ -758,13 +627,15 @@ function resolvePathInObject(
 
       return {
         path: [...path, parsedKey.value],
-        keyRange: makePosition(text, keyStart, keyEnd),
+        keyStart,
+        keyEnd,
       };
     }
 
     lastResult = {
       path: [...path, parsedKey.value],
-      keyRange: makePosition(text, keyStart, keyEnd),
+      keyStart,
+      keyEnd,
     };
 
     pos = valueEnd;
@@ -780,7 +651,7 @@ function resolvePathInArray(
   pos: number,
   target: number,
   path: PathSegment[],
-): { path: PathSegment[]; keyRange: JsonPosition } | null {
+): { path: PathSegment[]; keyStart: number; keyEnd: number } | null {
   if (text[pos] !== "[") return null;
   pos++;
 
@@ -803,7 +674,8 @@ function resolvePathInArray(
 
       return {
         path: [...path, index],
-        keyRange: makePosition(text, valueStart, valueEnd),
+        keyStart: valueStart,
+        keyEnd: valueEnd,
       };
     }
 
@@ -814,47 +686,4 @@ function resolvePathInArray(
   }
 
   return null;
-}
-
-export function makePosition(
-  text: string,
-  start: number,
-  end: number,
-  index?: LineIndex,
-): JsonPosition {
-  if (index) {
-    return index.makePosition(start, end);
-  }
-
-  let line = 1;
-  let col = 1;
-
-  let startLine = 1;
-  let startCol = 1;
-  let endLine = 1;
-  let endCol = 1;
-
-  for (let i = 0; i < end && i < text.length; i++) {
-    if (i === start) {
-      startLine = line;
-      startCol = col;
-    }
-
-    if (text[i] === "\n") {
-      line++;
-      col = 1;
-    } else {
-      col++;
-    }
-  }
-
-  endLine = line;
-  endCol = col;
-
-  return {
-    startLineNumber: startLine,
-    startColumn: startCol,
-    endLineNumber: endLine,
-    endColumn: endCol,
-  };
 }

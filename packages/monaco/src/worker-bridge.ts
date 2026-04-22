@@ -123,6 +123,42 @@ export function createWorkerBridge(monaco: MonacoApi): WorkerBridge {
   };
 }
 
+/**
+ * Walks the worker-produced JSON AST following the given property/index path.
+ * Returns the matching node or null when any segment cannot be resolved.
+ * Unlike the sync parser this uses the language service's fault-tolerant AST,
+ * so it recovers partial positions inside malformed JSON.
+ */
+export function findNodeByPath(
+  doc: MonacoJsonDocument,
+  path: readonly PropertyKey[],
+): MonacoJsonNode | null {
+  if (!doc.root) return null;
+  let node: MonacoJsonNode = doc.root;
+
+  for (const segment of path) {
+    if (typeof segment === "symbol") return null;
+    if (typeof segment === "number") {
+      if (node.type !== "array" || !node.children) return null;
+      const child: MonacoJsonNode | undefined = node.children[segment];
+      if (!child) return null;
+      node = child;
+    } else {
+      if (node.type !== "object" || !node.children) return null;
+      const key = String(segment);
+      const prop: MonacoJsonNode | undefined = node.children.find((child) => {
+        if (child.type !== "property" || !child.children?.[0]) return false;
+        const keyNode = child.children[0];
+        return keyNode.type === "string" && keyNode.value === key;
+      });
+      if (!prop || !prop.children?.[1]) return null;
+      node = prop.children[1];
+    }
+  }
+
+  return node;
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,

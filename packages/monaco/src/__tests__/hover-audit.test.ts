@@ -8,8 +8,6 @@ import {
 import {
   resolveJsonPath,
   resolvePathAtOffset,
-  positionToOffset,
-  LineIndex,
 } from "../json-path-position.js";
 import { attachZodToEditor } from "../attach.js";
 import { createZodHoverProvider, formatFieldMetadataHover } from "../hover.js";
@@ -59,6 +57,37 @@ function assertHoverContent(
   }
 }
 
+function offsetToPosition(
+  text: string,
+  offset: number,
+): { lineNumber: number; column: number } {
+  const clamped = Math.max(0, Math.min(offset, text.length));
+  let line = 1;
+  let lineStart = 0;
+  for (let i = 0; i < clamped; i++) {
+    if (text.charCodeAt(i) === 10) {
+      line++;
+      lineStart = i + 1;
+    }
+  }
+  return { lineNumber: line, column: clamped - lineStart + 1 };
+}
+
+function positionToOffset(
+  text: string,
+  lineNumber: number,
+  column: number,
+): number {
+  let line = 1;
+  for (let i = 0; i <= text.length; i++) {
+    if (line === lineNumber) {
+      return Math.min(i + column - 1, text.length);
+    }
+    if (text.charCodeAt(i) === 10) line++;
+  }
+  return text.length;
+}
+
 function valuePosition(
   text: string,
   path: Array<string | number>,
@@ -69,10 +98,7 @@ function valuePosition(
     return { lineNumber: 1, column: 1 };
   }
 
-  return {
-    lineNumber: range.startLineNumber,
-    column: range.startColumn,
-  };
+  return offsetToPosition(text, range.start);
 }
 
 function hoverRequiredState(
@@ -115,12 +141,7 @@ function keyPosition(
 ): { lineNumber: number; column: number } {
   const offset = text.indexOf(keyText);
   expect(offset).toBeGreaterThanOrEqual(0);
-  const index = new LineIndex(text);
-  const { line, col } = index.offsetToPosition(offset + 1);
-  return {
-    lineNumber: line,
-    column: col,
-  };
+  return offsetToPosition(text, offset + 1);
 }
 
 describe("hover audit", () => {
@@ -405,7 +426,7 @@ describe("hover audit", () => {
       attachment.dispose();
     });
 
-    test("dispose tears down hover registration, schema config, and markers", () => {
+    test("dispose tears down hover registration, schema config, and markers", async () => {
       const auditCase = findHoverAuditCase("uuid-required");
       expect(auditCase).not.toBeNull();
       if (!auditCase) return;
@@ -419,6 +440,7 @@ describe("hover audit", () => {
         validationDelay: 0,
       });
 
+      await Promise.resolve();
       vi.runAllTimers();
 
       expect(monaco.diagnosticsHistory.at(-1)).toMatchObject({

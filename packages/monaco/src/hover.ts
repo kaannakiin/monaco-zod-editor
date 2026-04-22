@@ -5,9 +5,8 @@ import type {
   SchemaDescriptor,
 } from "@zod-monaco/core";
 import { resolveFieldContext, SchemaCache } from "@zod-monaco/core";
-import type { MonacoModelLike, MonacoPosition, MonacoMatchingSchema } from "./monaco-types.js";
-import { positionToOffset, resolvePathAtOffset } from "./json-path-position.js";
-import type { LineIndex } from "./json-path-position.js";
+import type { MonacoModelLike, MonacoPosition } from "./monaco-types.js";
+import { resolvePathAtOffset } from "./json-path-position.js";
 import type { ZodMonacoLocale } from "./locale.js";
 import { defaultLocale } from "./locale.js";
 import type { WorkerBridge } from "./worker-bridge.js";
@@ -56,7 +55,9 @@ export function formatFieldMetadataHover(
   }
 
   if (typeInfo?.default !== undefined) {
-    parts.push(`**${l.defaultValue}:** \`${JSON.stringify(typeInfo.default)}\``);
+    parts.push(
+      `**${l.defaultValue}:** \`${JSON.stringify(typeInfo.default)}\``,
+    );
   }
 
   if (meta.examples && meta.examples.length > 0) {
@@ -87,25 +88,35 @@ export function formatFieldMetadataHover(
     if (c.minimum !== undefined || c.maximum !== undefined) {
       const min = c.minimum ?? c.exclusiveMinimum;
       const max = c.maximum ?? c.exclusiveMaximum;
-      if (min !== undefined && max !== undefined) constraintParts.push(`${min}–${max}`);
+      if (min !== undefined && max !== undefined)
+        constraintParts.push(`${min}–${max}`);
       else if (min !== undefined) constraintParts.push(`≥ ${min}`);
       else if (max !== undefined) constraintParts.push(`≤ ${max}`);
     }
     if (c.minLength !== undefined || c.maxLength !== undefined) {
-      if (c.minLength !== undefined && c.maxLength !== undefined) constraintParts.push(`${c.minLength}–${c.maxLength} chars`);
-      else if (c.minLength !== undefined) constraintParts.push(`min ${c.minLength} chars`);
-      else if (c.maxLength !== undefined) constraintParts.push(`max ${c.maxLength} chars`);
+      if (c.minLength !== undefined && c.maxLength !== undefined)
+        constraintParts.push(`${c.minLength}–${c.maxLength} chars`);
+      else if (c.minLength !== undefined)
+        constraintParts.push(`min ${c.minLength} chars`);
+      else if (c.maxLength !== undefined)
+        constraintParts.push(`max ${c.maxLength} chars`);
     }
     if (c.pattern) constraintParts.push(`pattern: \`${c.pattern}\``);
-    if (c.multipleOf !== undefined) constraintParts.push(`multiple of ${c.multipleOf}`);
+    if (c.multipleOf !== undefined)
+      constraintParts.push(`multiple of ${c.multipleOf}`);
     if (c.minItems !== undefined || c.maxItems !== undefined) {
-      if (c.minItems !== undefined && c.maxItems !== undefined) constraintParts.push(`${c.minItems}–${c.maxItems} items`);
-      else if (c.minItems !== undefined) constraintParts.push(`min ${c.minItems} items`);
-      else if (c.maxItems !== undefined) constraintParts.push(`max ${c.maxItems} items`);
+      if (c.minItems !== undefined && c.maxItems !== undefined)
+        constraintParts.push(`${c.minItems}–${c.maxItems} items`);
+      else if (c.minItems !== undefined)
+        constraintParts.push(`min ${c.minItems} items`);
+      else if (c.maxItems !== undefined)
+        constraintParts.push(`max ${c.maxItems} items`);
     }
     if (c.uniqueItems) constraintParts.push("unique items");
     if (constraintParts.length > 0) {
-      parts.push(`**${l.constraints ?? "Constraints"}:** ${constraintParts.join(", ")}`);
+      parts.push(
+        `**${l.constraints ?? "Constraints"}:** ${constraintParts.join(", ")}`,
+      );
     }
   }
 
@@ -117,7 +128,6 @@ export function createZodHoverProvider(
   modelUri: string,
   locale?: ZodMonacoLocale,
   cache?: SchemaCache,
-  getLineIndex?: () => LineIndex | null,
   workerBridge?: WorkerBridge,
 ): ZodHoverProvider {
   const resolveRequiredState = (
@@ -134,24 +144,33 @@ export function createZodHoverProvider(
     const parentNode = parentCtx.schemaNode;
     if (!parentNode) return undefined;
 
-    const hasProperty = (node: Record<string, unknown>, key: string): boolean => {
+    const hasProperty = (
+      node: Record<string, unknown>,
+      key: string,
+    ): boolean => {
       const props = node.properties;
-      if (props && typeof props === "object" && Object.prototype.hasOwnProperty.call(props, key)) {
+      if (
+        props &&
+        typeof props === "object" &&
+        Object.prototype.hasOwnProperty.call(props, key)
+      ) {
         return true;
       }
       const allOf = node.allOf as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(allOf)) {
         return allOf.some((branch) => {
           const bp = branch.properties;
-          return bp && typeof bp === "object" && Object.prototype.hasOwnProperty.call(bp, key);
+          return (
+            bp &&
+            typeof bp === "object" &&
+            Object.prototype.hasOwnProperty.call(bp, key)
+          );
         });
       }
       return false;
     };
 
-    return hasProperty(parentNode, lastSegment)
-      ? required
-      : undefined;
+    return hasProperty(parentNode, lastSegment) ? required : undefined;
   };
 
   return {
@@ -164,13 +183,7 @@ export function createZodHoverProvider(
       }
 
       const text = model.getValue();
-      const idx = getLineIndex?.() ?? undefined;
-      const offset = positionToOffset(
-        text,
-        position.lineNumber,
-        position.column,
-        idx,
-      );
+      const offset = model.getOffsetAt(position);
       const resolved = resolvePathAtOffset(text, offset);
 
       if (!resolved) {
@@ -190,19 +203,34 @@ export function createZodHoverProvider(
       const buildResult = (schemaBranch?: string): ZodHoverResult | null => {
         const parts: string[] = [];
 
-        const base = formatFieldMetadataHover(meta, required, locale, fieldCtx.typeInfo, fieldCtx.readOnly);
+        const base = formatFieldMetadataHover(
+          meta,
+          required,
+          locale,
+          fieldCtx.typeInfo,
+          fieldCtx.readOnly,
+        );
         if (base) parts.push(base);
 
         if (schemaBranch) {
           const l = locale ?? defaultLocale;
-          parts.push(`**${l.schemaBranch ?? "Schema branch"}:** ${schemaBranch}`);
+          parts.push(
+            `**${l.schemaBranch ?? "Schema branch"}:** ${schemaBranch}`,
+          );
         }
 
         if (parts.length === 0) return null;
 
+        const startPos = model.getPositionAt(resolved.keyStart);
+        const endPos = model.getPositionAt(resolved.keyEnd);
         return {
           contents: [{ value: parts.join("\n\n") }],
-          range: resolved.keyRange,
+          range: {
+            startLineNumber: startPos.lineNumber,
+            startColumn: startPos.column,
+            endLineNumber: endPos.lineNumber,
+            endColumn: endPos.column,
+          },
         };
       };
 
@@ -213,7 +241,8 @@ export function createZodHoverProvider(
       return workerBridge.getMatchingSchemas(model).then(
         (schemas) => {
           const matchAtOffset = schemas.find(
-            (s) => s.node.offset <= offset && offset < s.node.offset + s.node.length,
+            (s) =>
+              s.node.offset <= offset && offset < s.node.offset + s.node.length,
           );
           const branchTitle = matchAtOffset?.schema.title as string | undefined;
           return buildResult(branchTitle);

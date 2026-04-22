@@ -1,5 +1,40 @@
 # @zod-monaco/monaco
 
+## 4.0.0
+
+### Major Changes
+
+#### BREAKING: `monaco-editor` is now a peer dependency
+
+`@monaco-editor/loader` has been removed. `monaco-editor` is now a **peer dependency** and must be
+installed manually by consumer projects.
+
+```bash
+npm install monaco-editor
+# or
+pnpm add monaco-editor
+```
+
+#### BREAKING: `createZodCompletionProvider` signature changed
+
+The 4th positional parameter has been removed. Calls passing 5 arguments must be updated.
+
+#### BREAKING: `positionToOffset` and `LineIndex` are no longer exported
+
+Removed from the `json-path-position` module. Code that imports these directly must provide its own implementation.
+
+#### BREAKING: `OffsetRange` shape changed
+
+`{ startLineNumber: number, startColumn: number }` → `{ start: number }` (flat offset)
+
+### Minor Changes
+
+- `findNodeByPath(doc, path)` is now exported from `worker-bridge` — walks the worker-produced AST to resolve a node at a given property-key path
+
+### Patch Changes
+
+- Schema flushes are now microtask-deferred via `queueMicrotask` — consecutive `register()` / `update()` calls are batched into a single JSON diagnostics update
+
 ## 3.3.5
 
 ### Patch Changes
